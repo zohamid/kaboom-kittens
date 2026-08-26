@@ -2,7 +2,7 @@
 
 **A card game with no cards.** Somewhere in the deck, a kitten is about to explode — draw it and you're out. Everyone else? Playing dirty to make sure it's *you* who finds it.
 
-Made by **Zoha** — a fan who wanted all the kaboom with none of the cards. If you love kitty-explosion card games but the box is at home (or in another city), this is for you: open the link, and you're playing. On a phone in the back of a cab, on a laptop between meetings, on the couch passing one device around — no shuffling, no setup, no lost Defuse cards under the sofa.
+Made by **Zoha** — a fan who wanted all the kaboom with none of the cards. If you love kitty-explosion card games but the box is at home (or in another city), this is for you: open the link, and you're playing. On a phone in the back of a cab, on a laptop between meetings, on the couch passing one device around — no shuffling, no setup, no lost cards under the sofa.
 
 ## How it works
 
