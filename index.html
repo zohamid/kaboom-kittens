@@ -1,0 +1,1462 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Kaboom Kittens</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Patrick+Hand&display=swap">
+<style>
+/* ============ KABOOM KITTENS — single committed theme (card-table world) ============ */
+:root{
+  --felt:#155e54; --felt-dk:#0d443c; --felt-lt:#1d7264;
+  --paper:#fff6e8; --paper-dim:#f3e6cf; --ink:#2a211c; --ink-soft:#5d4f45;
+  --boom:#ff5233; --boom-dk:#d63a1f; --sun:#ffc53d; --sky:#3fb0d8;
+  --pink:#ff8fb5; --violet:#9b7ede; --leaf:#58b368; --steel:#8a97a8;
+  --shadow: 0 4px 0 rgba(20,12,8,.35);
+  --display:'Bangers', 'Arial Black', sans-serif;
+  --hand:'Patrick Hand','Comic Sans MS', cursive, sans-serif;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0; font-family:var(--hand); color:var(--ink); font-size:18px; line-height:1.35;
+  background:
+    radial-gradient(1200px 700px at 50% 18%, var(--felt-lt), transparent 70%),
+    radial-gradient(1600px 1100px at 50% 115%, var(--felt-dk), transparent 60%),
+    var(--felt);
+  min-height:100dvh; overflow-x:hidden;
+  user-select:none; -webkit-user-select:none;
+}
+#app{min-height:100dvh; display:flex; flex-direction:column}
+.screen{display:none; flex:1; flex-direction:column; align-items:center; padding:18px; padding-bottom:32px}
+.screen.on{display:flex}
+h1,h2,h3,.disp{font-family:var(--display); font-weight:400; letter-spacing:.04em; text-wrap:balance}
+
+/* ---------- comic buttons ---------- */
+.btn{
+  font-family:var(--display); letter-spacing:.06em; font-size:22px; color:var(--ink);
+  background:var(--paper); border:3px solid var(--ink); border-radius:14px 18px 15px 17px/17px 14px 18px 15px;
+  padding:10px 22px; cursor:pointer; box-shadow:var(--shadow); position:relative;
+  transition:transform .08s, box-shadow .08s;
+}
+.btn:hover{transform:translateY(-2px) rotate(-.5deg); box-shadow:0 6px 0 rgba(20,12,8,.35)}
+.btn:active{transform:translateY(2px); box-shadow:0 1px 0 rgba(20,12,8,.35)}
+.btn:focus-visible{outline:3px dashed var(--sun); outline-offset:3px}
+.btn.big{font-size:28px; padding:14px 30px}
+.btn.boom{background:var(--boom); color:#fff}
+.btn.sun{background:var(--sun)}
+.btn.sky{background:var(--sky); color:#fff}
+.btn.ghost{background:transparent; color:var(--paper); border-color:var(--paper); box-shadow:0 4px 0 rgba(0,0,0,.25)}
+.btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+.btn.small{font-size:16px; padding:6px 14px}
+
+/* ---------- title screen ---------- */
+#logo{margin:4vh 0 8px; text-align:center}
+#logo h1{
+  font-size:clamp(46px,11vw,96px); margin:0; color:var(--sun);
+  text-shadow: 3px 3px 0 var(--ink), 6px 6px 0 rgba(0,0,0,.3);
+  transform:rotate(-2deg);
+}
+#logo h1 .ka{color:var(--boom)}
+#logo .tag{color:var(--paper); font-size:clamp(17px,2.6vw,22px); margin-top:2px; opacity:.92}
+#heroArt{width:min(320px,70vw); filter:drop-shadow(0 8px 0 rgba(0,0,0,.25)); margin:6px 0 10px; animation:bob 3.2s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-1.5deg)}50%{transform:translateY(-8px) rotate(1.5deg)}}
+.menu{display:flex; flex-direction:column; gap:14px; width:min(340px,88vw); margin-top:8px}
+.credit{margin-top:auto; padding-top:18px; color:var(--paper); opacity:.6; font-size:14px; text-align:center}
+
+/* ---------- panels (setup / lobby / help) ---------- */
+.panel{
+  background:var(--paper); border:3px solid var(--ink); border-radius:22px 26px 20px 28px/26px 20px 28px 22px;
+  box-shadow:var(--shadow); padding:20px 22px; width:min(560px,94vw); margin-top:10px;
+}
+.panel h2{margin:0 0 12px; font-size:32px; color:var(--boom-dk)}
+.panel h3{margin:18px 0 6px; font-size:22px; color:var(--ink)}
+.row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0}
+.field{display:flex; flex-direction:column; gap:4px; margin:8px 0}
+.field label{font-size:15px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.08em}
+input[type=text]{
+  font-family:var(--hand); font-size:19px; color:var(--ink); background:#fff;
+  border:3px solid var(--ink); border-radius:10px 13px 11px 12px; padding:8px 12px; width:100%;
+}
+input[type=text]:focus-visible{outline:3px dashed var(--sky); outline-offset:2px}
+.chips{display:flex; gap:8px; flex-wrap:wrap}
+.chip{
+  font-family:var(--display); font-size:19px; padding:6px 16px; border:3px solid var(--ink);
+  border-radius:999px; background:#fff; cursor:pointer; box-shadow:0 3px 0 rgba(20,12,8,.3);
+}
+.chip.sel{background:var(--sun)}
+.note{font-size:15px; color:var(--ink-soft); background:var(--paper-dim); border:2px dashed var(--ink-soft); border-radius:12px; padding:10px 12px; margin:10px 0}
+.backrow{width:min(560px,94vw); display:flex; justify-content:flex-start; margin-bottom:4px}
+
+/* ---------- help / rules ---------- */
+#scr-help .panel{max-height:none}
+.rule{display:flex; gap:12px; align-items:flex-start; margin:10px 0}
+.rule .mini{flex:0 0 54px}
+.rule b{font-family:var(--display); letter-spacing:.04em; font-weight:400; font-size:19px}
+.rule p{margin:2px 0 0; font-size:16.5px}
+hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; margin:16px 0}
+
+/* ---------- game table ---------- */
+#scr-table{padding:10px 10px 6px; gap:6px}
+#oppRow{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; width:100%; min-height:86px}
+.opp{
+  background:var(--paper); border:3px solid var(--ink); border-radius:16px 19px 15px 18px;
+  padding:6px 12px 5px; text-align:center; box-shadow:var(--shadow); position:relative; min-width:96px;
+  transition:transform .2s;
+}
+.opp .avatar{width:46px; height:46px; margin:0 auto}
+.opp .nm{font-family:var(--display); font-size:16px; letter-spacing:.05em; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.opp .cards{font-size:14px; color:var(--ink-soft)}
+.opp.turn{transform:translateY(-4px); border-color:var(--boom)}
+.opp.turn::after{content:""; position:absolute; inset:-7px; border:3px dashed var(--sun); border-radius:20px; pointer-events:none; animation:spinB 6s linear infinite}
+@keyframes spinB{to{transform:rotate(0.001deg)}}
+.opp.dead{opacity:.55; filter:grayscale(.9)}
+.opp.dead .nm{text-decoration:line-through}
+.opp .boomtag{position:absolute; top:-12px; right:-8px; font-size:22px}
+.opp.me{border-color:var(--sky)}
+
+#tableMid{flex:1; display:flex; align-items:center; justify-content:center; gap:clamp(18px,6vw,64px); width:100%; position:relative; min-height:190px}
+.pile{position:relative; width:118px; height:165px; flex:0 0 auto}
+.pile .stackghost{position:absolute; inset:0; border-radius:12px; background:var(--felt-dk); border:3px solid rgba(0,0,0,.25)}
+.pile .count{
+  position:absolute; z-index:5; bottom:-12px; left:50%; transform:translateX(-50%);
+  background:var(--ink); color:var(--paper); font-family:var(--display); font-size:15px; letter-spacing:.05em;
+  border-radius:999px; padding:2px 12px; white-space:nowrap;
+}
+.pile .plabel{position:absolute; top:-24px; width:100%; text-align:center; color:var(--paper); font-family:var(--display); letter-spacing:.08em; font-size:15px; opacity:.85}
+#deckPile .card{position:absolute; inset:0; cursor:pointer}
+#deckPile.mydraw .card.back{animation:pulseDeck 1.4s ease-in-out infinite}
+@keyframes pulseDeck{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+#discardPile .card{position:absolute; inset:0}
+#discardPile .card:nth-last-child(2){transform:rotate(-6deg)}
+#discardPile .card:nth-last-child(3){transform:rotate(5deg)}
+
+#banner{
+  position:absolute; top:2px; left:50%; transform:translateX(-50%); z-index:6; max-width:94%;
+  background:var(--ink); color:var(--paper); border-radius:999px; padding:6px 18px;
+  font-size:17px; text-align:center; box-shadow:0 3px 0 rgba(0,0,0,.3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#banner .disp{color:var(--sun)}
+#attackBadge{
+  position:absolute; bottom:6px; left:50%; transform:translateX(-50%) rotate(-3deg); z-index:6;
+  background:var(--boom); color:#fff; border:3px solid var(--ink); font-family:var(--display);
+  padding:3px 14px; border-radius:12px 15px 11px 14px; letter-spacing:.05em; display:none;
+}
+
+/* ---------- log ---------- */
+#logbar{width:min(680px,96vw); height:44px; overflow:hidden; position:relative}
+#logbar .entry{
+  position:absolute; width:100%; text-align:center; color:var(--paper); font-size:16px;
+  text-shadow:0 2px 0 rgba(0,0,0,.4); transition:all .35s; opacity:.95;
+}
+
+/* ---------- hand ---------- */
+#handWrap{width:100%; display:flex; flex-direction:column; align-items:center; gap:8px; padding-bottom:4px}
+#handInfo{color:var(--paper); font-family:var(--display); letter-spacing:.06em; font-size:17px; text-shadow:0 2px 0 rgba(0,0,0,.35); min-height:22px}
+#hand{
+  display:flex; justify-content:flex-start; align-items:flex-end; min-height:172px; max-width:100vw;
+  padding:14px 18px 6px; overflow-x:auto; overflow-y:visible; scrollbar-width:thin;
+}
+#hand .card{flex:0 0 auto; margin-right:-34px; cursor:pointer; transition:transform .14s, margin .14s; transform-origin:bottom center}
+#hand .card:hover{transform:translateY(-14px) rotate(-1deg); z-index:30}
+#hand .card:last-child{margin-right:0}
+#hand .card.sel{transform:translateY(-26px); z-index:31; box-shadow:0 0 0 4px var(--sun), var(--shadow)}
+#handBtns{display:flex; gap:12px; align-items:center; min-height:52px; flex-wrap:wrap; justify-content:center}
+
+/* ---------- cards ---------- */
+.card{
+  width:118px; height:165px; background:var(--paper); border:3px solid var(--ink);
+  border-radius:12px; position:relative; box-shadow:var(--shadow); overflow:hidden;
+}
+.card .inner{position:absolute; inset:4px; border:2.5px solid var(--cc,var(--ink)); border-radius:8px; display:flex; flex-direction:column; overflow:hidden}
+.card .cname{
+  font-family:var(--display); font-size:13px; letter-spacing:.03em; text-align:center; line-height:1.05;
+  padding:4px 3px 2px; color:var(--cc,var(--ink)); background:var(--ct,transparent);
+}
+.card .art{flex:1; display:flex; align-items:center; justify-content:center; padding:2px}
+.card .art svg{width:100%; height:100%; max-height:74px}
+.card .cdesc{font-size:10.5px; line-height:1.15; text-align:center; padding:2px 4px 4px; color:var(--ink-soft); min-height:40px}
+.card.back{background:var(--ink)}
+.card.back .inner{border-color:var(--sun); background:repeating-linear-gradient(45deg, #33261f 0 12px, #2a211c 12px 24px); align-items:center; justify-content:center}
+.card.back .backpaw{font-family:var(--display); color:var(--sun); font-size:19px; transform:rotate(-14deg); letter-spacing:.05em; text-align:center; line-height:1}
+.card.mini{width:74px; height:104px; box-shadow:0 2px 0 rgba(20,12,8,.3)}
+.card.mini .cname{font-size:10px; padding:2px 2px 1px}
+.card.mini .cdesc{display:none}
+.card.mini .art svg{max-height:62px}
+
+/* ---------- modal ---------- */
+#modalBg{position:fixed; inset:0; background:rgba(10,30,26,.72); display:none; z-index:60; align-items:center; justify-content:center; padding:14px}
+#modalBg.on{display:flex}
+#modal{
+  background:var(--paper); border:4px solid var(--ink); border-radius:24px 28px 22px 30px/28px 22px 30px 24px;
+  box-shadow:0 8px 0 rgba(0,0,0,.35); padding:20px 22px; width:min(600px,96vw); max-height:92dvh; overflow-y:auto;
+  animation:popIn .22s cubic-bezier(.2,1.4,.4,1);
+}
+@keyframes popIn{from{transform:scale(.7) rotate(-2deg); opacity:0}}
+#modal h2{margin:0 0 10px; font-size:30px; color:var(--boom-dk); text-align:center}
+#modal .mrow{display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin:12px 0}
+#modal .mtext{text-align:center; font-size:18px; margin:6px 0}
+#modal .cardpick{display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:10px 0}
+#modal .cardpick .card{cursor:pointer; transition:transform .12s}
+#modal .cardpick .card:hover{transform:translateY(-6px) rotate(-1deg)}
+#modal .cardpick .card.sel{box-shadow:0 0 0 4px var(--sun), var(--shadow)}
+
+/* ---------- curtain (pass device) ---------- */
+#curtain{
+  position:fixed; inset:0; z-index:80; display:none; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+  background:radial-gradient(900px 600px at 50% 30%, var(--felt-lt), var(--felt-dk)); text-align:center; padding:20px;
+}
+#curtain.on{display:flex}
+#curtain h2{color:var(--sun); font-size:clamp(34px,8vw,54px); margin:0; text-shadow:3px 3px 0 var(--ink)}
+#curtain p{color:var(--paper); font-size:20px; margin:0}
+
+/* ---------- nope flash & fx ---------- */
+#fx{position:fixed; inset:0; pointer-events:none; z-index:90; overflow:hidden}
+.fly{position:fixed; z-index:91; transition:all .5s cubic-bezier(.4,.8,.4,1); pointer-events:none}
+.nopeStamp{
+  position:fixed; z-index:95; left:50%; top:42%; transform:translate(-50%,-50%) rotate(-14deg) scale(3); opacity:0;
+  font-family:var(--display); font-size:90px; color:var(--boom); -webkit-text-stroke:4px var(--ink);
+  text-shadow:0 6px 0 rgba(0,0,0,.3); animation:stamp .8s forwards; pointer-events:none;
+}
+@keyframes stamp{20%{transform:translate(-50%,-50%) rotate(-14deg) scale(1); opacity:1} 80%{opacity:1} 100%{opacity:0; transform:translate(-50%,-50%) rotate(-14deg) scale(1.05)}}
+.boomFlash{position:fixed; inset:0; z-index:94; background:radial-gradient(circle at 50% 45%, #fff6, var(--boom) 30%, transparent 72%); animation:bflash .9s forwards; pointer-events:none}
+@keyframes bflash{0%{opacity:0}12%{opacity:1}100%{opacity:0}}
+.shake{animation:shake .5s}
+@keyframes shake{10%,90%{transform:translate(-2px,1px)}20%,80%{transform:translate(4px,-2px)}30%,70%{transform:translate(-6px,2px)}40%,60%{transform:translate(5px,3px)}50%{transform:translate(-4px,-3px)}}
+.confetti{position:fixed; z-index:92; width:12px; height:16px; top:-20px; pointer-events:none}
+
+/* ---------- future peek fan ---------- */
+.futureFan{display:flex; gap:14px; justify-content:center; margin:8px 0}
+.futureFan .slot{text-align:center}
+.futureFan .slot .lab{font-family:var(--display); font-size:14px; color:var(--ink-soft); margin-top:6px}
+
+@media (max-width:620px){
+  .card{width:96px; height:136px}
+  .card .cdesc{font-size:10px; min-height:24px}
+  .card .art svg{max-height:64px}
+  #hand .card{margin-right:-40px}
+  .pile{width:96px; height:136px}
+  #tableMid{min-height:150px}
+}
+#pawmark{position:fixed; right:10px; bottom:6px; z-index:55; font-size:12.5px; color:var(--paper); opacity:.6; font-family:var(--hand); pointer-events:none; text-shadow:0 1px 0 rgba(0,0,0,.45)}
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.001s !important; transition-duration:.001s !important}
+}
+</style>
+</head><body>
+<div id="app">
+
+  <!-- ============ TITLE ============ -->
+  <div class="screen on" id="scr-title">
+    <div id="logo">
+      <h1><span class="ka">KABOOM</span> KITTENS</h1>
+      <div class="tag">A frantic card game of cats, luck &amp; betrayal — for 2 to 5 players</div>
+    </div>
+    <div id="heroArt"></div>
+    <div class="menu">
+      <button class="btn big boom" id="btnBots">Play vs Bots</button>
+      <button class="btn big sun" id="btnHotseat">Pass &amp; Play</button>
+      <button class="btn big sky" id="btnOnline">Play Online</button>
+      <button class="btn ghost" id="btnHelp">How to Play</button>
+    </div>
+    <div class="credit">Made by Zoha 🐾 — a fan who wanted all the kaboom with none of the cards. Original art &amp; code.</div>
+  </div>
+
+  <!-- ============ SETUP (bots / hotseat) ============ -->
+  <div class="screen" id="scr-setup">
+    <div class="backrow"><button class="btn small ghost backBtn">&larr; Back</button></div>
+    <div class="panel">
+      <h2 id="setupTitle">Game Setup</h2>
+      <div class="field"><label>Your name</label><input type="text" id="inpName" maxlength="14" value="You"></div>
+      <h3 id="cntLabel">How many players?</h3>
+      <div class="chips" id="cntChips"></div>
+      <div id="hotNames"></div>
+      <div class="row" style="margin-top:16px; justify-content:center">
+        <button class="btn big boom" id="btnStartLocal">Deal the cat-astrophe!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ONLINE ============ -->
+  <div class="screen" id="scr-online">
+    <div class="backrow"><button class="btn small ghost backBtn">&larr; Back</button></div>
+    <div class="panel" id="onlineSetupPanel">
+      <h2>Play Online</h2>
+      <div id="onlineCfg">
+        <p style="margin:4px 0 10px">Play from different phones &amp; laptops — one of you hosts, everyone joins with a room code. Long-distance chaos, purr-fectly synced.</p>
+        <div class="field"><label>Firebase database URL (one-time setup)</label>
+          <input type="text" id="inpDb" placeholder="https://your-project-default-rtdb.firebaseio.com">
+        </div>
+        <div class="note" id="dbHelp">
+          <b>One-time setup (2 min, free):</b> go to console.firebase.google.com → create a project → build → <i>Realtime Database</i> → create in test mode → copy the database URL (ends in <i>firebaseio.com</i> or <i>firebasedatabase.app</i>) and paste it above. Everyone playing must use the same URL — send them this file with it filled in, or just tell them the URL.
+        </div>
+      </div>
+      <div class="field"><label>Your name</label><input type="text" id="inpNameOn" maxlength="14" value=""></div>
+      <div class="row" style="justify-content:center; gap:14px">
+        <button class="btn big sun" id="btnCreateRoom">Create room</button>
+      </div>
+      <hr class="scribble">
+      <div class="row" style="justify-content:center; align-items:center">
+        <input type="text" id="inpRoom" placeholder="ROOM CODE" maxlength="4" style="width:150px; text-transform:uppercase; font-family:var(--display); font-size:24px; text-align:center; letter-spacing:.2em">
+        <button class="btn big sky" id="btnJoinRoom">Join</button>
+      </div>
+      <div class="note" id="onlineErr" style="display:none; border-color:var(--boom); color:var(--boom-dk)"></div>
+    </div>
+    <div class="panel" id="lobbyPanel" style="display:none">
+      <h2>Room <span id="lobbyCode" style="color:var(--sky)"></span></h2>
+      <p class="mtext" style="text-align:center">Tell your friends the code — meow’s the time! They pick <i>Play Online → Join</i>.</p>
+      <div id="lobbyPlayers" class="chips" style="justify-content:center; margin:14px 0"></div>
+      <div class="row" style="justify-content:center">
+        <button class="btn big boom" id="btnStartOnline" style="display:none">Start game</button>
+        <span id="lobbyWait" style="font-size:17px; color:var(--ink-soft)">Waiting for the host to start…</span>
+      </div>
+      <div class="note">Keep the host's window open during the game — the host's device runs the deck.</div>
+    </div>
+  </div>
+
+  <!-- ============ HELP ============ -->
+  <div class="screen" id="scr-help">
+    <div class="backrow"><button class="btn small ghost backBtn">&larr; Back</button></div>
+    <div class="panel">
+      <h2>How to Play</h2>
+      <p><b class="disp" style="color:var(--boom-dk)">The idea:</b> take turns drawing cards. Hidden in the deck are <b>Kaboom Kittens</b>. Draw one and you explode — you're out! Unless you have a <b>Defuse</b>… The last player alive wins.</p>
+      <p><b class="disp">On your turn:</b> play as many cards as you like (or none), then <b>draw one card</b> to end your turn. That's it — no kitten!</p>
+      <hr class="scribble">
+      <div id="ruleCards"></div>
+      <hr class="scribble">
+      <h3>Cat combos</h3>
+      <div class="rule"><div class="mini" id="rc-pair"></div><div><b>Two matching cats</b><p>Steal a random card from any player.</p></div></div>
+      <div class="rule"><div class="mini" id="rc-trip"></div><div><b>Three matching cats</b><p>Name a card type — if that player has one, they must hand it over.</p></div></div>
+      <div class="rule"><div class="mini" id="rc-five"></div><div><b>Five different cats</b><p>Take any card you want from the discard pile.</p></div></div>
+      <hr class="scribble">
+      <p><b class="disp">Setup:</b> everyone starts with 7 cards + 1 Defuse. The deck holds one fewer Kaboom Kitten than there are players — so someone <i>will</i> find one eventually.</p>
+      <p><b class="disp">Noping a Nope</b> turns it into a "Yup" — the original card happens after all. Nopes can stack forever.</p>
+    </div>
+  </div>
+
+  <!-- ============ TABLE ============ -->
+  <div class="screen" id="scr-table">
+    <div id="oppRow"></div>
+    <div id="tableMid">
+      <div id="banner">Welcome!</div>
+      <div class="pile" id="deckPile">
+        <div class="plabel">DRAW</div>
+        <div class="stackghost"></div>
+        <div class="count" id="deckCount">0</div>
+      </div>
+      <div class="pile" id="discardPile">
+        <div class="plabel">DISCARD</div>
+        <div class="stackghost"></div>
+        <div class="count" id="discardCount">0</div>
+      </div>
+      <div id="attackBadge">2 TURNS!</div>
+    </div>
+    <div id="logbar"></div>
+    <div id="handWrap">
+      <div id="handInfo"></div>
+      <div id="hand"></div>
+      <div id="handBtns">
+        <button class="btn sun" id="btnPlaySel" style="display:none">Play</button>
+        <button class="btn boom" id="btnDraw" style="display:none">Draw &amp; end turn</button>
+        <button class="btn small ghost" id="btnQuit">Quit</button>
+        <button class="btn small ghost" id="btnMute">🔊</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OVERLAYS ============ -->
+  <div id="curtain">
+    <div id="curtainArt" style="width:150px"></div>
+    <h2 id="curtainTitle">Pass the device</h2>
+    <p id="curtainText"></p>
+    <button class="btn big sun" id="curtainBtn">I'm ready!</button>
+  </div>
+
+  <div id="modalBg"><div id="modal"></div></div>
+  <div id="pawmark">© 2026 Zoha 🐾</div>
+  <div id="fx"></div>
+</div>
+<script>
+/* ================= ORIGINAL CARD ART (hand-drawn wobbly SVG) ================= */
+const INK='#2a211c';
+function svgWrap(inner,vb='0 0 100 100'){return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;}
+
+/* a wobbly cat head. cx,cy,r ; fill ; mood: happy|angry|scared|smug|plead|zen */
+function catHead(cx,cy,r,fill,mood='happy',extra=''){
+  const s=r/30, I=INK;
+  const earL=`M${cx-24*s} ${cy-14*s} L${cx-30*s} ${cy-34*s} L${cx-10*s} ${cy-26*s}`;
+  const earR=`M${cx+24*s} ${cy-14*s} L${cx+30*s} ${cy-34*s} L${cx+10*s} ${cy-26*s}`;
+  let eyes='',mouth='';
+  const eyL=cx-11*s, eyR=cx+11*s, eyY=cy-4*s;
+  if(mood==='angry'){
+    eyes=`<path d="M${eyL-6*s} ${eyY-7*s} L${eyL+5*s} ${eyY-2*s}" stroke="${I}" stroke-width="${3*s}"/><path d="M${eyR+6*s} ${eyY-7*s} L${eyR-5*s} ${eyY-2*s}" stroke="${I}" stroke-width="${3*s}"/>
+    <circle cx="${eyL}" cy="${eyY+3*s}" r="${3.4*s}" fill="${I}"/><circle cx="${eyR}" cy="${eyY+3*s}" r="${3.4*s}" fill="${I}"/>`;
+    mouth=`<path d="M${cx-8*s} ${cy+14*s} Q${cx} ${cy+9*s} ${cx+8*s} ${cy+14*s}" stroke="${I}" stroke-width="${2.6*s}"/>`;
+  }else if(mood==='scared'){
+    eyes=`<circle cx="${eyL}" cy="${eyY}" r="${6*s}" fill="#fff" stroke="${I}" stroke-width="${2*s}"/><circle cx="${eyR}" cy="${eyY}" r="${6*s}" fill="#fff" stroke="${I}" stroke-width="${2*s}"/>
+    <circle cx="${eyL}" cy="${eyY}" r="${2.2*s}" fill="${I}"/><circle cx="${eyR}" cy="${eyY}" r="${2.2*s}" fill="${I}"/>`;
+    mouth=`<ellipse cx="${cx}" cy="${cy+13*s}" rx="${4.5*s}" ry="${6*s}" fill="${I}"/>`;
+  }else if(mood==='plead'){
+    eyes=`<circle cx="${eyL}" cy="${eyY}" r="${7*s}" fill="${I}"/><circle cx="${eyR}" cy="${eyY}" r="${7*s}" fill="${I}"/>
+    <circle cx="${eyL+2*s}" cy="${eyY-2.4*s}" r="${2.4*s}" fill="#fff"/><circle cx="${eyR+2*s}" cy="${eyY-2.4*s}" r="${2.4*s}" fill="#fff"/>
+    <circle cx="${eyL-2*s}" cy="${eyY+2*s}" r="${1.2*s}" fill="#fff"/><circle cx="${eyR-2*s}" cy="${eyY+2*s}" r="${1.2*s}" fill="#fff"/>`;
+    mouth=`<path d="M${cx-5*s} ${cy+12*s} Q${cx} ${cy+16*s} ${cx+5*s} ${cy+12*s}" stroke="${I}" stroke-width="${2.6*s}"/>`;
+  }else if(mood==='smug'){
+    eyes=`<path d="M${eyL-5*s} ${eyY} Q${eyL} ${eyY+4*s} ${eyL+5*s} ${eyY}" stroke="${I}" stroke-width="${3*s}"/><path d="M${eyR-5*s} ${eyY} Q${eyR} ${eyY+4*s} ${eyR+5*s} ${eyY}" stroke="${I}" stroke-width="${3*s}"/>`;
+    mouth=`<path d="M${cx-6*s} ${cy+12*s} Q${cx+2*s} ${cy+17*s} ${cx+9*s} ${cy+11*s}" stroke="${I}" stroke-width="${2.6*s}"/>`;
+  }else if(mood==='zen'){
+    eyes=`<path d="M${eyL-5*s} ${eyY} L${eyL+5*s} ${eyY}" stroke="${I}" stroke-width="${3*s}"/><path d="M${eyR-5*s} ${eyY} L${eyR+5*s} ${eyY}" stroke="${I}" stroke-width="${3*s}"/>`;
+    mouth=`<path d="M${cx-5*s} ${cy+13*s} Q${cx} ${cy+16*s} ${cx+5*s} ${cy+13*s}" stroke="${I}" stroke-width="${2.6*s}"/>`;
+  }else{ // happy
+    eyes=`<circle cx="${eyL}" cy="${eyY}" r="${4*s}" fill="${I}"/><circle cx="${eyR}" cy="${eyY}" r="${4*s}" fill="${I}"/>
+    <circle cx="${eyL+1.4*s}" cy="${eyY-1.4*s}" r="${1.3*s}" fill="#fff"/><circle cx="${eyR+1.4*s}" cy="${eyY-1.4*s}" r="${1.3*s}" fill="#fff"/>`;
+    mouth=`<path d="M${cx-7*s} ${cy+11*s} Q${cx-3*s} ${cy+15*s} ${cx} ${cy+11*s} Q${cx+3*s} ${cy+15*s} ${cx+7*s} ${cy+11*s}" stroke="${I}" stroke-width="${2.4*s}"/>`;
+  }
+  return `
+  <path d="${earL} Z" fill="${fill}" stroke="${I}" stroke-width="${3*s}"/>
+  <path d="${earR} Z" fill="${fill}" stroke="${I}" stroke-width="${3*s}"/>
+  <ellipse cx="${cx}" cy="${cy}" rx="${28*s}" ry="${25*s}" fill="${fill}" stroke="${I}" stroke-width="${3*s}"/>
+  ${eyes}
+  <path d="M${cx-3*s} ${cy+6*s} L${cx+3*s} ${cy+6*s} L${cx} ${cy+10*s} Z" fill="${I}"/>
+  ${mouth}
+  <path d="M${cx-28*s} ${cy+4*s} L${cx-42*s} ${cy+1*s} M${cx-28*s} ${cy+9*s} L${cx-42*s} ${cy+10*s}" stroke="${I}" stroke-width="${2*s}"/>
+  <path d="M${cx+28*s} ${cy+4*s} L${cx+42*s} ${cy+1*s} M${cx+28*s} ${cy+9*s} L${cx+42*s} ${cy+10*s}" stroke="${I}" stroke-width="${2*s}"/>
+  ${extra}`;
+}
+const star=(cx,cy,r,fill)=>{let p='';for(let i=0;i<10;i++){const a=Math.PI/5*i-Math.PI/2,rr=i%2?r*.45:r;p+=(i?'L':'M')+(cx+rr*Math.cos(a)).toFixed(1)+' '+(cy+rr*Math.sin(a)).toFixed(1)+' ';}return `<path d="${p}Z" fill="${fill}" stroke="${INK}" stroke-width="2.5"/>`;};
+
+const ART={
+  BOOM: ()=>svgWrap(`
+    ${star(50,54,46,'#ffc53d')}${star(50,54,34,'#ff5233')}
+    <circle cx="50" cy="58" r="24" fill="#2a211c" stroke="#2a211c" stroke-width="3"/>
+    <path d="M50 34 Q46 24 56 18" stroke="#2a211c" stroke-width="4"/>
+    ${star(60,14,9,'#ffc53d')}
+    <path d="M28 46 L20 40 L30 38 Z" fill="#2a211c"/><path d="M72 46 L80 40 L70 38 Z" fill="#2a211c"/>
+    <circle cx="42" cy="55" r="4.5" fill="#fff"/><circle cx="58" cy="55" r="4.5" fill="#fff"/>
+    <circle cx="42" cy="55" r="1.8" fill="#2a211c"/><circle cx="58" cy="55" r="1.8" fill="#2a211c"/>
+    <ellipse cx="50" cy="66" rx="4" ry="5" fill="#fff"/>
+    <path d="M22 60 L10 58 M22 66 L11 70 M78 60 L90 58 M78 66 L89 70" stroke="#2a211c" stroke-width="2"/>`),
+  DEFUSE: ()=>svgWrap(`
+    <path d="M8 78 Q30 70 46 78 T88 74" stroke="#ff5233" stroke-width="5"/>
+    <path d="M46 78 L58 66 M46 70 L58 82" stroke="#8a97a8" stroke-width="5"/>
+    <circle cx="60" cy="63" r="5" fill="#fff6e8" stroke="#2a211c" stroke-width="3"/>
+    <circle cx="60" cy="85" r="5" fill="#fff6e8" stroke="#2a211c" stroke-width="3"/>
+    ${catHead(48,34,26,'#58b368','zen')}`),
+  ATTACK: ()=>svgWrap(`
+    ${star(76,26,16,'#ffc53d')}
+    <text x="76" y="31" font-family="Bangers, sans-serif" font-size="12" fill="#2a211c" text-anchor="middle" stroke="none">POW</text>
+    ${catHead(44,46,27,'#9b7ede','angry')}
+    <ellipse cx="26" cy="82" rx="12" ry="9" fill="#9b7ede" stroke="#2a211c" stroke-width="3"/>
+    <ellipse cx="62" cy="82" rx="12" ry="9" fill="#9b7ede" stroke="#2a211c" stroke-width="3"/>
+    <path d="M22 80 L22 86 M28 79 L28 86 M58 80 L58 86 M64 79 L64 86" stroke="#2a211c" stroke-width="2"/>`),
+  SKIP: ()=>svgWrap(`
+    <path d="M6 40 L26 40 M2 52 L22 52 M8 64 L26 64" stroke="#3fb0d8" stroke-width="4"/>
+    ${catHead(58,44,26,'#3fb0d8','scared')}
+    <ellipse cx="52" cy="82" rx="16" ry="8" fill="#3fb0d8" stroke="#2a211c" stroke-width="3"/>
+    <path d="M38 86 Q30 92 24 86 M66 86 Q74 92 80 86" stroke="#2a211c" stroke-width="3"/>
+    <path d="M84 24 Q92 30 86 38" stroke="#2a211c" stroke-width="3"/>`),
+  FAVOR: ()=>svgWrap(`
+    ${catHead(50,44,28,'#ff8fb5','plead')}
+    <ellipse cx="34" cy="82" rx="8" ry="10" fill="#ff8fb5" stroke="#2a211c" stroke-width="3"/>
+    <ellipse cx="66" cy="82" rx="8" ry="10" fill="#ff8fb5" stroke="#2a211c" stroke-width="3"/>
+    <path d="M83 12 a5 5 0 0 1 10 0 q0 5 -10 11 q-10 -6 -10 -11 a5 5 0 0 1 10 0" fill="#ff5233" stroke="#2a211c" stroke-width="2.5" transform="rotate(12 83 18)"/>`),
+  SHUFFLE: ()=>svgWrap(`
+    <rect x="8" y="26" width="24" height="34" rx="4" fill="#fff6e8" stroke="#2a211c" stroke-width="3" transform="rotate(-18 20 43)"/>
+    <rect x="68" y="24" width="24" height="34" rx="4" fill="#fff6e8" stroke="#2a211c" stroke-width="3" transform="rotate(16 80 41)"/>
+    <rect x="38" y="10" width="24" height="34" rx="4" fill="#fff6e8" stroke="#2a211c" stroke-width="3" transform="rotate(4 50 27)"/>
+    <path d="M14 78 Q28 64 46 74 M86 80 Q72 62 54 72" stroke="#ffc53d" stroke-width="4"/>
+    <path d="M46 74 l-8 -2 m8 2 l-3 7 M54 72 l8 -1 m-8 1 l2 8" stroke="#ffc53d" stroke-width="4"/>
+    ${catHead(50,72,20,'#ffc53d','scared')}`),
+  FUTURE: ()=>svgWrap(`
+    ${catHead(50,32,22,'#9b7ede','zen',`<circle cx="50" cy="14" r="4" fill="#ffc53d" stroke="#2a211c" stroke-width="2"/>`)}
+    <circle cx="50" cy="76" r="19" fill="#cdeffb" stroke="#2a211c" stroke-width="3"/>
+    <circle cx="43" cy="70" r="4" fill="#fff"/>
+    <circle cx="44" cy="78" r="3" fill="#3fb0d8"/><circle cx="52" cy="74" r="3" fill="#ff5233"/><circle cx="58" cy="80" r="3" fill="#ffc53d"/>
+    <path d="M31 92 Q50 98 69 92" stroke="#2a211c" stroke-width="3"/>
+    <path d="M14 30 l4 0 m-2 -2 l0 4 M84 44 l5 0 m-2.5 -2.5 l0 5" stroke="#ffc53d" stroke-width="2.5"/>`),
+  NOPE: ()=>svgWrap(`
+    <path d="M30 96 L30 62 Q30 40 50 40 Q70 40 70 62 L70 96" fill="#ffc53d" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M38 46 Q36 34 42 32 M50 42 Q50 30 56 30 M62 46 Q64 34 58 32" stroke="#2a211c" stroke-width="3"/>
+    <ellipse cx="50" cy="70" rx="11" ry="8" fill="#ffb1c9" stroke="#2a211c" stroke-width="2.5"/>
+    <rect x="12" y="4" width="76" height="28" rx="10" fill="#fff" stroke="#2a211c" stroke-width="3.5" transform="rotate(-4 50 18)"/>
+    <text x="50" y="26" font-family="Bangers, sans-serif" font-size="21" fill="#ff5233" text-anchor="middle" stroke="none" transform="rotate(-4 50 18)">NOPE!</text>`),
+  CAT_SAMOSA: ()=>svgWrap(`
+    <path d="M50 16 L88 84 L12 84 Z" fill="#e8a33d" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M50 16 L88 84 M50 16 L12 84" stroke="#c77f22" stroke-width="3" stroke-dasharray="2 7"/>
+    <path d="M26 84 Q30 76 36 84 Q42 76 48 84 Q54 76 60 84 Q66 76 72 84" stroke="#2a211c" stroke-width="3" fill="none"/>
+    ${catHead(50,58,17,'#f4c98a','happy')}`),
+  CAT_DISCO: ()=>svgWrap(`
+    <circle cx="50" cy="20" r="13" fill="#cfd8e3" stroke="#2a211c" stroke-width="3"/>
+    <path d="M39 15 L61 15 M39 25 L61 25 M45 8 L45 32 M55 8 L55 32" stroke="#8a97a8" stroke-width="2"/>
+    <path d="M50 33 L50 38" stroke="#2a211c" stroke-width="3"/>
+    ${catHead(50,64,26,'#ff8fb5','smug',`
+      <rect x="30" y="52" width="17" height="10" rx="4" fill="#2a211c"/>
+      <rect x="53" y="52" width="17" height="10" rx="4" fill="#2a211c"/>
+      <path d="M47 56 L53 56 M30 55 L24 52 M70 55 L76 52" stroke="#2a211c" stroke-width="3"/>`)}
+    <path d="M12 34 l5 0 m-2.5 -2.5 l0 5 M86 60 l5 0 m-2.5 -2.5 l0 5 M16 74 l4 0 m-2 -2 l0 4" stroke="#ffc53d" stroke-width="2.5"/>`),
+  CAT_PICKLE: ()=>svgWrap(`
+    <path d="M50 22 Q76 22 74 54 Q72 88 50 88 Q28 88 26 54 Q24 22 50 22" fill="#58b368" stroke="#2a211c" stroke-width="3.5"/>
+    <circle cx="38" cy="60" r="3" fill="#3e8a4c"/><circle cx="60" cy="52" r="3" fill="#3e8a4c"/><circle cx="46" cy="76" r="3" fill="#3e8a4c"/><circle cx="62" cy="72" r="2.5" fill="#3e8a4c"/>
+    ${catHead(50,38,17,'#8fd19b','scared')}`),
+  CAT_MELON: ()=>svgWrap(`
+    <path d="M14 46 A38 38 0 0 1 86 46 L50 46 Z" fill="#ff6b81" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M14 46 A38 38 0 0 1 86 46" stroke="#58b368" stroke-width="7" fill="none"/>
+    <circle cx="36" cy="32" r="2.5" fill="#2a211c"/><circle cx="52" cy="24" r="2.5" fill="#2a211c"/><circle cx="66" cy="33" r="2.5" fill="#2a211c"/>
+    ${catHead(50,68,22,'#8fd19b','happy')}`),
+  CAT_TACHE: ()=>svgWrap(`
+    ${catHead(50,48,28,'#c9a06c','smug',`
+      <path d="M50 66 Q38 60 30 66 Q26 60 34 57 Q44 55 50 62 Q56 55 66 57 Q74 60 70 66 Q62 60 50 66" fill="#2a211c"/>
+      <circle cx="63" cy="43" r="8" fill="none" stroke="#2a211c" stroke-width="2.5"/>
+      <path d="M63 51 L63 60" stroke="#2a211c" stroke-width="2.5"/>`)}
+    <path d="M34 12 L44 20 L50 8 L56 20 L66 12 L62 26 L38 26 Z" fill="#ffc53d" stroke="#2a211c" stroke-width="3"/>`),
+};
+const CARD_BACK_ART=()=>svgWrap(`
+  <circle cx="50" cy="56" r="17" fill="#ffc53d"/>
+  <ellipse cx="32" cy="34" rx="7" ry="9" fill="#ffc53d" transform="rotate(-16 32 34)"/>
+  <ellipse cx="50" cy="28" rx="7" ry="9" fill="#ffc53d"/>
+  <ellipse cx="68" cy="34" rx="7" ry="9" fill="#ffc53d" transform="rotate(16 68 34)"/>`);
+const HERO_ART=()=>svgWrap(`
+  ${star(50,52,48,'#ff5233')}${star(50,52,36,'#ffc53d')}
+  ${catHead(50,54,26,'#fff6e8','scared')}
+  <path d="M50 22 Q46 12 56 8" stroke="#2a211c" stroke-width="3.5"/>${star(58,6,7,'#ffc53d')}`,'0 0 100 100');
+
+/* ================= CARD DEFINITIONS ================= */
+const CARDS={
+  BOOM:   {name:'Kaboom Kitten', color:'#d63a1f', tint:'#ffd9cf', desc:'BOOM. You explode — unless you defuse it.'},
+  DEFUSE: {name:'Defuse',        color:'#2f7d3f', tint:'#d9f0dd', desc:'Snip! Survive a Kaboom Kitten & hide it back in the deck.'},
+  ATTACK: {name:'Attack',        color:'#6b4fb3', tint:'#e8e0f8', desc:'End your turn without drawing. Next player takes 2 turns.'},
+  SKIP:   {name:'Skip',          color:'#1f7fa8', tint:'#d7eef8', desc:'End your turn without drawing a card.'},
+  FAVOR:  {name:'Favor',         color:'#c94f79', tint:'#fbdde8', desc:'One player must give you a card of their choice.'},
+  SHUFFLE:{name:'Shuffle',       color:'#b8860b', tint:'#faeecb', desc:'Shuffle the draw pile.'},
+  FUTURE: {name:'See the Future',color:'#7b5fc0', tint:'#e9e2fa', desc:'Secretly peek at the top 3 cards of the deck.'},
+  NOPE:   {name:'Nope',          color:'#c1272d', tint:'#ffe3c2', desc:'Cancel any card (except a Kaboom or Defuse). Play it anytime!'},
+  CAT_SAMOSA:{name:'Samosa Cat', cat:1, color:'#b06a10', tint:'#fdeed2', desc:'Just a crispy cat. Play matching cats as combos!'},
+  CAT_DISCO: {name:'Disco Cat',  cat:1, color:'#b06a10', tint:'#fdeed2', desc:'Born to boogie. Play matching cats as combos!'},
+  CAT_PICKLE:{name:'Pickle Cat', cat:1, color:'#b06a10', tint:'#fdeed2', desc:'In a bit of a pickle. Play matching cats as combos!'},
+  CAT_MELON: {name:'Melon Cat',  cat:1, color:'#b06a10', tint:'#fdeed2', desc:'One in a melon. Play matching cats as combos!'},
+  CAT_TACHE: {name:'Mustache Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'A cat of distinction. Play matching cats as combos!'},
+};
+const CAT_TYPES=Object.keys(CARDS).filter(k=>CARDS[k].cat);
+/* ================= GAME ENGINE (pure rules; mutate state + emit events) ================= */
+function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+const NOPEABLE=['ATTACK','SKIP','FAVOR','SHUFFLE','FUTURE','PAIR','TRIPLE','FIVE'];
+
+function newGame(playerDefs){
+  const N=playerDefs.length;
+  let pool=[];
+  ['ATTACK','SKIP','FAVOR','SHUFFLE'].forEach(t=>{for(let i=0;i<4;i++)pool.push(t);});
+  ['FUTURE','NOPE'].forEach(t=>{for(let i=0;i<5;i++)pool.push(t);});
+  CAT_TYPES.forEach(t=>{for(let i=0;i<4;i++)pool.push(t);});
+  shuffleArr(pool);
+  const players=playerDefs.map((p,i)=>({id:i,name:p.name,bot:!!p.bot,alive:true,hand:['DEFUSE']}));
+  players.forEach(p=>{for(let i=0;i<7;i++)p.hand.push(pool.pop());});
+  const extraDefuse=N<=3?2:6-N;
+  for(let i=0;i<extraDefuse;i++)pool.push('DEFUSE');
+  for(let i=0;i<N-1;i++)pool.push('BOOM');
+  shuffleArr(pool);
+  return {players,deck:pool,discard:[],turn:0,turnsLeft:1,phase:'turn',pending:null,pendingBoom:null,pendingFavor:null,winner:null,seq:0,ev:[]};
+}
+const alivePlayers=G=>G.players.filter(p=>p.alive);
+const curP=G=>G.players[G.turn];
+function emit(G,e){G.ev.push(e);}
+function log(G,msg){emit(G,{t:'log',msg});}
+
+function nextAliveIdx(G,from){
+  let i=from;
+  for(let k=0;k<G.players.length;k++){i=(i+1)%G.players.length; if(G.players[i].alive)return i;}
+  return from;
+}
+function advance(G,forcedTurns){
+  G.turn=nextAliveIdx(G,G.turn);
+  G.turnsLeft=forcedTurns||1;
+  G.phase='turn';
+  emit(G,{t:'turn',pid:G.turn,turnsLeft:G.turnsLeft});
+}
+function endOneTurn(G){ // after a draw / skip / defuse-insert
+  G.turnsLeft--;
+  if(G.turnsLeft>0){G.phase='turn'; emit(G,{t:'turn',pid:G.turn,turnsLeft:G.turnsLeft});}
+  else advance(G);
+}
+function checkWin(G){
+  const al=alivePlayers(G);
+  if(al.length===1){G.phase='over'; G.winner=al[0].id; emit(G,{t:'win',pid:al[0].id}); log(G,`🏆 ${al[0].name} wins!`); return true;}
+  return false;
+}
+function removeFromHand(p,types){ // remove one instance of each listed type; return false if missing
+  const idxs=[];
+  const copy=[...p.hand];
+  for(const t of types){const i=copy.indexOf(t); if(i<0)return false; copy[i]=null; idxs.push(i);}
+  p.hand=copy.filter(c=>c!==null);
+  return true;
+}
+
+/* classify a selection of card types into a legal play */
+function classifyPlay(types){
+  if(types.length===1){
+    const t=types[0];
+    if(['ATTACK','SKIP','FAVOR','SHUFFLE','FUTURE'].includes(t))return {kind:t};
+    return null;
+  }
+  if(types.every(t=>CARDS[t].cat)){
+    if(types.length===2&&types[0]===types[1])return {kind:'PAIR'};
+    if(types.length===3&&types.every(t=>t===types[0]))return {kind:'TRIPLE'};
+    if(types.length===5&&new Set(types).size===5)return {kind:'FIVE'};
+  }
+  return null;
+}
+function playNeedsTarget(kind){return ['FAVOR','PAIR','TRIPLE'].includes(kind);}
+
+function dispatch(G,a){
+  G.ev=[];
+  const P=G.players[a.pid];
+  switch(a.a){
+    case 'play':{
+      if(G.phase!=='turn'||a.pid!==G.turn||!P.alive)return null;
+      const cls=classifyPlay(a.cards);
+      if(!cls)return null;
+      if(playNeedsTarget(cls.kind)){
+        const T=G.players[a.target];
+        if(!T||!T.alive||a.target===a.pid)return null;
+      }
+      if(cls.kind==='TRIPLE'&&!a.named)return null;
+      if(!removeFromHand(P,a.cards))return null;
+      G.discard.push(...a.cards);
+      G.pending={kind:cls.kind,actor:a.pid,cards:a.cards,target:a.target,named:a.named,wish:a.wish,nopes:[]};
+      G.phase='nope';
+      emit(G,{t:'play',pid:a.pid,cards:a.cards,kind:cls.kind,target:a.target});
+      const tn=a.target!=null?` on ${G.players[a.target].name}`:'';
+      const label=cls.kind==='PAIR'?`a pair of ${CARDS[a.cards[0]].name}s`:cls.kind==='TRIPLE'?`three ${CARDS[a.cards[0]].name}s`:cls.kind==='FIVE'?'five different cats':CARDS[a.cards[0]].name;
+      log(G,`${P.name} plays ${label}${tn}!`);
+      break;
+    }
+    case 'nope':{
+      if(G.phase!=='nope'||!P.alive)return null;
+      if(!removeFromHand(P,['NOPE']))return null;
+      G.discard.push('NOPE');
+      G.pending.nopes.push(a.pid);
+      emit(G,{t:'nope',pid:a.pid,count:G.pending.nopes.length});
+      log(G,G.pending.nopes.length%2?`${P.name} yells NOPE!`:`${P.name} nopes the Nope — it's back on!`);
+      break;
+    }
+    case 'closeNope':{
+      if(G.phase!=='nope')return null;
+      const pd=G.pending; G.pending=null;
+      const actor=G.players[pd.actor];
+      if(pd.nopes.length%2===1){
+        G.phase='turn';
+        emit(G,{t:'fizzle',kind:pd.kind});
+        log(G,`…so nothing happens. Cards wasted!`);
+        break;
+      }
+      switch(pd.kind){
+        case 'ATTACK':{
+          const nt=G.turnsLeft>=2?G.turnsLeft+2:2;
+          G.turnsLeft=0;
+          advance(G,nt);
+          log(G,`${curP(G).name} is under attack — ${nt} turns!`);
+          break;
+        }
+        case 'SKIP': log(G,`${actor.name} skips away on quiet little paws…`); endOneTurn(G); break;
+        case 'SHUFFLE': shuffleArr(G.deck); G.phase='turn'; emit(G,{t:'shuffled'}); log(G,'The deck gets a good shake.'); break;
+        case 'FUTURE':{
+          G.phase='turn';
+          emit(G,{t:'future',pid:pd.actor,cards:G.deck.slice(-3).reverse()});
+          log(G,`${actor.name} peeks at the future… 👀`);
+          break;
+        }
+        case 'FAVOR':{
+          const T=G.players[pd.target];
+          if(!T.alive||T.hand.length===0){G.phase='turn'; log(G,`${T.name} has nothing to give!`);}
+          else{G.phase='favorGive'; G.pendingFavor={from:pd.target,to:pd.actor}; emit(G,{t:'favorAsk',from:pd.target,to:pd.actor});}
+          break;
+        }
+        case 'PAIR':{
+          const T=G.players[pd.target];
+          G.phase='turn';
+          if(T.alive&&T.hand.length){
+            const i=Math.floor(Math.random()*T.hand.length);
+            const c=T.hand.splice(i,1)[0];
+            actor.hand.push(c);
+            emit(G,{t:'steal',from:pd.target,to:pd.actor,card:c});
+            log(G,`${actor.name} steals a random card from ${T.name}!`);
+          }else log(G,`${T.name} had nothing to steal!`);
+          break;
+        }
+        case 'TRIPLE':{
+          const T=G.players[pd.target];
+          G.phase='turn';
+          const i=T.alive?T.hand.indexOf(pd.named):-1;
+          if(i>=0){
+            T.hand.splice(i,1); actor.hand.push(pd.named);
+            emit(G,{t:'steal',from:pd.target,to:pd.actor,card:pd.named});
+            log(G,`${T.name} had a ${CARDS[pd.named].name} — handed over!`);
+          }else log(G,`${T.name} doesn't have a ${CARDS[pd.named].name}. Tough luck!`);
+          break;
+        }
+        case 'FIVE':{
+          G.phase='turn';
+          const i=G.discard.slice(0,-5).lastIndexOf(pd.wish);
+          if(pd.wish&&i>=0){
+            G.discard.splice(i,1); actor.hand.push(pd.wish);
+            emit(G,{t:'dig',pid:pd.actor,card:pd.wish});
+            log(G,`${actor.name} digs a ${CARDS[pd.wish].name} out of the discard pile!`);
+          }else log(G,'The discard pile gave up nothing.');
+          break;
+        }
+      }
+      break;
+    }
+    case 'draw':{
+      if(G.phase!=='turn'||a.pid!==G.turn||!P.alive)return null;
+      const c=G.deck.pop();
+      if(c==='BOOM'){
+        G.phase='defuse'; G.pendingBoom={pid:a.pid};
+        emit(G,{t:'boomDrawn',pid:a.pid});
+        log(G,`💣 ${P.name} drew a KABOOM KITTEN!`);
+      }else{
+        P.hand.push(c);
+        emit(G,{t:'draw',pid:a.pid,card:c});
+        endOneTurn(G);
+      }
+      break;
+    }
+    case 'defuse':{
+      if(G.phase!=='defuse'||a.pid!==G.pendingBoom.pid)return null;
+      if(a.use&&removeFromHand(P,['DEFUSE'])){
+        G.discard.push('DEFUSE');
+        G.phase='insert';
+        emit(G,{t:'defused',pid:a.pid});
+        log(G,`✂️ ${P.name} defuses it! Now hiding it back in the deck…`);
+      }else{
+        P.alive=false;
+        G.discard.push(...P.hand,'BOOM'); P.hand=[];
+        G.pendingBoom=null;
+        emit(G,{t:'exploded',pid:a.pid});
+        log(G,`💥 ${P.name} EXPLODED! ${alivePlayers(G).length} player${alivePlayers(G).length>1?'s':''} left.`);
+        if(!checkWin(G)){G.turnsLeft=0; advance(G);}
+      }
+      break;
+    }
+    case 'insert':{
+      if(G.phase!=='insert'||a.pid!==G.pendingBoom.pid)return null;
+      let pos=a.pos; // 0 = top of deck
+      if(pos==null||pos<0||pos>G.deck.length)pos=Math.floor(Math.random()*(G.deck.length+1));
+      G.deck.splice(G.deck.length-pos,0,'BOOM');
+      G.pendingBoom=null;
+      emit(G,{t:'inserted',pid:a.pid});
+      log(G,`${P.name} slips the kitten back… somewhere. 😼`);
+      endOneTurn(G);
+      break;
+    }
+    case 'give':{
+      if(G.phase!=='favorGive'||!G.pendingFavor||a.pid!==G.pendingFavor.from)return null;
+      const c=P.hand.splice(a.idx,1)[0];
+      if(c==null)return null;
+      const to=G.players[G.pendingFavor.to];
+      to.hand.push(c);
+      emit(G,{t:'give',from:a.pid,to:to.id,card:c});
+      log(G,`${P.name} hands a card to ${to.name}.`);
+      G.pendingFavor=null; G.phase='turn';
+      break;
+    }
+    default:return null;
+  }
+  G.seq++;
+  return G.ev;
+}
+/* ================= UI + LOCAL MODES (bots / pass-and-play) ================= */
+const $=q=>document.querySelector(q), $$=q=>[...document.querySelectorAll(q)];
+let MODE=null, G=null, VIEW=0, HIDE_HAND=false, selected=[], SND=true, BOT_PEEK={}, NOPE_TIMER=null, PENDING_UI=null;
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+SND = store.get('kk_snd')!=='0';
+
+/* ---------- tiny synth ---------- */
+let AC=null;
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}return AC;}
+function tone(f,dur,type='square',vol=.16,when=0,slide=0){
+  if(!SND)return; const c=ac(); if(!c)return;
+  const t=c.currentTime+when, o=c.createOscillator(), g=c.createGain();
+  o.type=type; o.frequency.setValueAtTime(f,t);
+  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f+slide),t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+.02);
+}
+const sPop=()=>tone(520,.09,'square',.14,0,220);
+const sSwish=()=>tone(880,.12,'sine',.1,0,-500);
+const sNope=()=>{tone(300,.1,'sawtooth',.16);tone(180,.16,'sawtooth',.16,.09);};
+const sUhoh=()=>{tone(392,.14,'triangle',.18);tone(311,.24,'triangle',.18,.16);};
+const sBoom=()=>{if(!SND)return;const c=ac();if(!c)return;const t=c.currentTime,b=c.createBuffer(1,c.sampleRate*.6,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);const s=c.createBufferSource(),g=c.createGain();s.buffer=b;g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.6);s.connect(g);g.connect(c.destination);s.start(t);tone(70,.5,'sine',.3,0,-40);};
+const sWin=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,.18,'triangle',.16,i*.13));};
+const sDefuse=()=>{tone(700,.06,'square',.14);tone(1000,.09,'square',.14,.07);};
+
+/* ---------- screens ---------- */
+function show(id){$$('.screen').forEach(s=>s.classList.remove('on'));$('#'+id).classList.add('on');}
+$('#heroArt').innerHTML=HERO_ART();
+$('#curtainArt').innerHTML=svgWrap(catHead(50,54,30,'#ffc53d','happy'));
+$$('.backBtn').forEach(b=>b.onclick=()=>{show('scr-title')});
+$('#btnHelp').onclick=()=>{renderHelp();show('scr-help')};
+$('#btnMute').onclick=()=>{SND=!SND;store.set('kk_snd',SND?'1':'0');$('#btnMute').textContent=SND?'🔊':'🔇';};
+$('#btnMute').textContent=SND?'🔊':'🔇';
+
+function renderHelp(){
+  const el=$('#ruleCards'); if(el.dataset.done)return; el.dataset.done=1;
+  ['BOOM','DEFUSE','ATTACK','SKIP','FAVOR','SHUFFLE','FUTURE','NOPE'].forEach(t=>{
+    el.insertAdjacentHTML('beforeend',`<div class="rule"><div class="mini">${ART[t]()}</div><div><b style="color:${CARDS[t].color}">${CARDS[t].name}</b><p>${CARDS[t].desc}</p></div></div>`);
+  });
+  $('#rc-pair').innerHTML=ART.CAT_SAMOSA(); $('#rc-trip').innerHTML=ART.CAT_DISCO(); $('#rc-five').innerHTML=ART.CAT_MELON();
+}
+
+/* ---------- setup screens ---------- */
+let setupMode='bots', playerCount=3;
+$('#btnBots').onclick=()=>{setupMode='bots';openSetup()};
+$('#btnHotseat').onclick=()=>{setupMode='hot';openSetup()};
+function openSetup(){
+  $('#setupTitle').textContent=setupMode==='bots'?'You vs the Bots':'Pass & Play';
+  $('#cntLabel').textContent=setupMode==='bots'?'How many bots?':'How many players?';
+  const chips=$('#cntChips'); chips.innerHTML='';
+  const opts=setupMode==='bots'?[1,2,3,4]:[2,3,4,5];
+  opts.forEach(n=>{
+    const c=document.createElement('button');c.className='chip'+(n===playerCountFor()?' sel':'');c.textContent=n;
+    c.onclick=()=>{playerCount=setupMode==='bots'?n+1:n;openSetup();};
+    chips.appendChild(c);
+  });
+  function playerCountFor(){return setupMode==='bots'?playerCount-1:playerCount;}
+  if(playerCount<2||playerCount>5)playerCount=3;
+  const hn=$('#hotNames'); hn.innerHTML='';
+  if(setupMode==='hot'){
+    for(let i=1;i<playerCount;i++)
+      hn.insertAdjacentHTML('beforeend',`<div class="field"><label>Player ${i+1}</label><input type="text" maxlength="14" class="hotName" value="Player ${i+1}"></div>`);
+  }
+  show('scr-setup');
+}
+const BOT_NAMES=['Biscuit 🤖','Mochi 🤖','Floof 🤖','Pretzel 🤖'];
+$('#btnStartLocal').onclick=()=>{
+  const me=($('#inpName').value.trim()||'You');
+  let defs;
+  if(setupMode==='bots'){
+    defs=[{name:me}].concat(BOT_NAMES.slice(0,playerCount-1).map(n=>({name:n,bot:true})));
+    MODE='bots'; VIEW=0;
+  }else{
+    defs=[{name:me}].concat($$('.hotName').map(i=>({name:i.value.trim()||'Player'})));
+    defs=defs.slice(0,playerCount);
+    MODE='hot'; VIEW=0;
+  }
+  startLocalGame(defs);
+};
+function startLocalGame(defs){
+  G=newGame(defs); BOT_PEEK={}; selected=[]; HIDE_HAND=false;
+  show('scr-table');
+  logMsg('Cards dealt. Good luck! 🐱');
+  renderAll();
+  if(MODE==='hot')curtainFor(G.turn,()=>{VIEW=G.turn;renderAll();});
+  afterChange();
+}
+
+/* ---------- generic modal ---------- */
+function modal(html){$('#modal').innerHTML=html;$('#modalBg').classList.add('on');}
+function closeModal(){$('#modalBg').classList.remove('on');}
+function curtainFor(pid,cb){
+  HIDE_HAND=true;renderHand();
+  $('#curtainTitle').textContent=`Pass to ${G.players[pid].name}`;
+  $('#curtainText').textContent='Paws off — no peeking at other hands! 😾';
+  $('#curtain').classList.add('on');
+  $('#curtainBtn').onclick=()=>{$('#curtain').classList.remove('on');HIDE_HAND=false;cb&&cb();};
+}
+
+/* ---------- rendering ---------- */
+function cardHTML(t,cls=''){
+  const c=CARDS[t];
+  return `<div class="card ${cls}" data-type="${t}" style="--cc:${c.color};--ct:${c.tint}">
+    <div class="inner"><div class="cname">${c.name}</div><div class="art">${ART[t]()}</div><div class="cdesc">${c.desc}</div></div></div>`;
+}
+function cardBackHTML(cls=''){return `<div class="card back ${cls}"><div class="inner"><div>${CARD_BACK_ART()}<div class="backpaw">KABOOM<br>KITTENS</div></div></div></div>`;}
+const AV_COLORS=['#ffc53d','#ff8fb5','#3fb0d8','#9b7ede','#58b368'];
+function avatarSVG(pid,dead){return svgWrap(catHead(50,54,30,AV_COLORS[pid%5],dead?'zen':'happy'));}
+
+function renderAll(){renderOpps();renderPiles();renderHand();renderBanner();}
+function renderOpps(){
+  const row=$('#oppRow'); row.innerHTML='';
+  G.players.forEach(p=>{
+    if(p.id===VIEW)return;
+    row.insertAdjacentHTML('beforeend',`
+      <div class="opp ${p.id===G.turn&&p.alive?'turn':''} ${p.alive?'':'dead'} ${p.id===VIEW?'me':''}" id="opp${p.id}">
+        <div class="avatar">${avatarSVG(p.id,!p.alive)}</div>
+        <div class="nm">${p.name}</div>
+        <div class="cards">${p.alive?p.hand.length+' cards':''}</div>
+        ${p.alive?'':'<div class="boomtag">💥</div>'}
+      </div>`);
+  });
+}
+function renderPiles(){
+  const dp=$('#deckPile');
+  dp.querySelectorAll('.card').forEach(e=>e.remove());
+  if(G.deck.length)dp.insertAdjacentHTML('beforeend',cardBackHTML());
+  $('#deckCount').textContent=G.deck.length+' left';
+  dp.classList.toggle('mydraw',isMyTurn()&&G.phase==='turn');
+  const dc=$('#discardPile');
+  dc.querySelectorAll('.card').forEach(e=>e.remove());
+  G.discard.slice(-3).forEach(t=>dc.insertAdjacentHTML('beforeend',cardHTML(t)));
+  $('#discardCount').textContent=G.discard.length?G.discard.length:'empty';
+  const ab=$('#attackBadge');
+  if(G.turnsLeft>1&&G.phase!=='over'){ab.style.display='block';ab.textContent=`${G.players[G.turn].name}: ${G.turnsLeft} TURNS!`;}
+  else ab.style.display='none';
+  const deckTop=dp.querySelector('.card');
+  if(deckTop)deckTop.onclick=()=>{if(isMyTurn()&&G.phase==='turn')act({a:'draw',pid:VIEW});};
+}
+function isMyTurn(){
+  if(!G||G.phase==='over')return false;
+  if(MODE==='online')return G.turn===VIEW&&!G.players[VIEW].bot;
+  if(MODE==='bots')return G.turn===0;
+  return G.turn===VIEW; // hot
+}
+function myHand(){return G.players[VIEW]?G.players[VIEW].hand:[];}
+function renderHand(){
+  const h=$('#hand'); h.innerHTML='';
+  if(HIDE_HAND||!G||!G.players[VIEW]||!G.players[VIEW].alive){
+    $('#btnPlaySel').style.display='none';$('#btnDraw').style.display='none';
+    if(G&&G.players[VIEW]&&!G.players[VIEW].alive&&G.phase!=='over')$('#handInfo').textContent='You exploded 💥 — haunting the table as a ghost cat…';
+    return;
+  }
+  myHand().forEach((t,i)=>{
+    h.insertAdjacentHTML('beforeend',cardHTML(t,selected.includes(i)?'sel':''));
+    const el=h.lastElementChild;
+    el.onclick=()=>{toggleSel(i)};
+  });
+  updateHandButtons();
+}
+function toggleSel(i){
+  if(!isMyTurn()||G.phase!=='turn'){selected=[];renderHand();return;}
+  const k=selected.indexOf(i);
+  if(k>=0)selected.splice(k,1);else selected.push(i);
+  renderHand();
+}
+function updateHandButtons(){
+  const play=$('#btnPlaySel'), draw=$('#btnDraw');
+  const mine=isMyTurn()&&G.phase==='turn';
+  draw.style.display=mine?'':'none';
+  draw.onclick=()=>act({a:'draw',pid:VIEW});
+  const types=selected.map(i=>myHand()[i]);
+  const cls=types.length?classifyPlay(types):null;
+  if(mine&&cls){
+    play.style.display='';
+    play.textContent=cls.kind==='PAIR'?'Play pair: steal!':cls.kind==='TRIPLE'?'Play trio: demand!':cls.kind==='FIVE'?'Play 5: dig!':'Play '+CARDS[types[0]].name;
+    play.onclick=()=>beginPlay(types,cls);
+  }else play.style.display='none';
+}
+function renderBanner(msg){
+  const b=$('#banner');
+  if(msg){b.innerHTML=msg;return;}
+  if(!G)return;
+  if(G.phase==='over'){b.innerHTML=`<span class="disp">${G.players[G.winner].name} WINS!</span>`;return;}
+  const cp=G.players[G.turn];
+  if(G.phase==='nope'){b.innerHTML=`⏳ Waiting for Nopes…`;return;}
+  if(G.phase==='favorGive'){b.innerHTML=`${G.players[G.pendingFavor.from].name} is choosing a card to give…`;return;}
+  if(G.phase==='defuse'||G.phase==='insert'){b.innerHTML=`💣 <span class="disp">${G.players[G.pendingBoom.pid].name}</span> drew a Kaboom Kitten!`;return;}
+  if(isMyTurn())b.innerHTML=`<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span> Play cards or draw to end your turn.`;
+  else b.innerHTML=`<span class="disp">${cp.name}</span> is ${cp.bot?'plotting…':'playing…'}`;
+}
+let logT=null;
+function logMsg(m){
+  const bar=$('#logbar');
+  const old=bar.querySelector('.entry');
+  if(old){old.style.opacity=0;old.style.transform='translateY(-18px)';setTimeout(()=>old.remove(),350);}
+  const e=document.createElement('div');e.className='entry';e.textContent=m;e.style.transform='translateY(18px)';e.style.opacity=0;
+  bar.appendChild(e);requestAnimationFrame(()=>{e.style.transform='translateY(6px)';e.style.opacity=1;});
+}
+
+/* ---------- fx ---------- */
+function rectOf(el){const r=el.getBoundingClientRect();return r;}
+function flyCard(html,from,to,dur=500){
+  const f=document.createElement('div');f.className='fly';f.innerHTML=html;
+  const c=f.firstElementChild;
+  Object.assign(f.style,{left:from.left+'px',top:from.top+'px',width:from.width+'px',height:from.height+'px'});
+  if(c){c.style.width='100%';c.style.height='100%';}
+  document.body.appendChild(f);
+  requestAnimationFrame(()=>Object.assign(f.style,{left:to.left+'px',top:to.top+'px',width:to.width+'px',height:to.height+'px',transitionDuration:dur+'ms'}));
+  setTimeout(()=>f.remove(),dur+80);
+}
+function fxPlay(pid,type){
+  const from=pid===VIEW?rectOf($('#hand'))||rectOf($('#discardPile')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#deckPile')));
+  flyCard(cardHTML(type),from,rectOf($('#discardPile')));sPop();
+}
+function fxDraw(pid){
+  const to=pid===VIEW?rectOf($('#hand')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#hand')));
+  flyCard(cardBackHTML(),rectOf($('#deckPile')),to);sSwish();
+}
+function fxNope(){const s=document.createElement('div');s.className='nopeStamp';s.textContent='NOPE!';document.body.appendChild(s);setTimeout(()=>s.remove(),850);sNope();}
+function fxBoom(){
+  const f=document.createElement('div');f.className='boomFlash';document.body.appendChild(f);setTimeout(()=>f.remove(),950);
+  document.body.classList.add('shake');setTimeout(()=>document.body.classList.remove('shake'),550);sBoom();
+}
+function fxConfetti(){
+  const cols=['#ffc53d','#ff5233','#3fb0d8','#ff8fb5','#58b368','#fff6e8'];
+  for(let i=0;i<70;i++){
+    const c=document.createElement('div');c.className='confetti';
+    c.style.left=Math.random()*100+'vw';c.style.background=cols[i%6];
+    c.style.transform=`rotate(${Math.random()*360}deg)`;
+    document.body.appendChild(c);
+    const fall=c.animate([{transform:c.style.transform,top:'-20px'},{transform:`rotate(${Math.random()*720}deg)`,top:'105vh'}],{duration:1800+Math.random()*2200,delay:Math.random()*700,easing:'ease-in'});
+    fall.onfinish=()=>c.remove();
+  }
+}
+
+/* ---------- play flows (collect params, then dispatch) ---------- */
+function beginPlay(types,cls){
+  const done=(params={})=>{selected=[];act(Object.assign({a:'play',pid:VIEW,cards:types},params));};
+  if(cls.kind==='FAVOR'||cls.kind==='PAIR')pickTarget(t=>done({target:t}));
+  else if(cls.kind==='TRIPLE')pickTarget(t=>pickCardType('Demand which card?',Object.keys(CARDS).filter(k=>k!=='BOOM'),n=>done({target:t,named:n})));
+  else if(cls.kind==='FIVE'){
+    const avail=[...new Set(G.discard)].filter(k=>k!=='BOOM');
+    if(!avail.length){renderBanner('Discard pile is empty!');return;}
+    pickCardType('Take which card from the discard pile?',avail,w=>done({wish:w}));
+  }
+  else done();
+}
+function pickTarget(cb){
+  const opts=G.players.filter(p=>p.alive&&p.id!==VIEW);
+  modal(`<h2>Pick a victim</h2><p class="mtext" style="margin-top:-6px">(nothing purr-sonal)</p><div class="mrow">${opts.map(p=>`
+    <button class="btn sun" data-t="${p.id}">${p.name}<br><span style="font-family:var(--hand);font-size:14px">${p.hand.length} cards</span></button>`).join('')}
+    </div><div class="mrow"><button class="btn small ghost2" id="mCancel">Cancel</button></div>`);
+  $$('#modal [data-t]').forEach(b=>b.onclick=()=>{closeModal();cb(+b.dataset.t)});
+  $('#mCancel').onclick=closeModal;
+}
+function pickCardType(title,keys,cb){
+  modal(`<h2>${title}</h2><div class="cardpick">${keys.map(k=>`<div data-k="${k}">${cardHTML(k,'mini')}</div>`).join('')}</div>
+  <div class="mrow"><button class="btn small" id="mCancel">Cancel</button></div>`);
+  $$('#modal [data-k]').forEach(d=>d.onclick=()=>{closeModal();cb(d.dataset.k)});
+  $('#mCancel').onclick=closeModal;
+}
+
+/* ---------- event stream → fx + follow-ups ---------- */
+function processEvents(evs){
+  evs.forEach(e=>{
+    switch(e.t){
+      case 'log':logMsg(e.msg);break;
+      case 'play':fxPlay(e.pid,e.cards[0]);break;
+      case 'nope':fxNope();break;
+      case 'fizzle':break;
+      case 'draw':fxDraw(e.pid);break;
+      case 'boomDrawn':sUhoh();break;
+      case 'defused':sDefuse();break;
+      case 'exploded':fxBoom();break;
+      case 'shuffled':sSwish();break;
+      case 'steal':case 'give':sPop();break;
+      case 'future':if(e.pid===VIEW&&(MODE!=='bots'||e.pid===0))showFuture(e.cards);break;
+      case 'win':fxConfetti();sWin();setTimeout(()=>showWin(e.pid),900);break;
+      case 'turn':selected=[];break;
+    }
+  });
+  renderAll();
+}
+function showFuture(cards){
+  modal(`<h2>The Future…</h2><p class="mtext">Top of the deck, in draw order:</p>
+    <div class="futureFan">${cards.map((c,i)=>`<div class="slot">${cardHTML(c,'mini')}<div class="lab">${['NEXT','2nd','3rd'][i]||''}</div></div>`).join('')}</div>
+    <div class="mrow"><button class="btn sun" id="mOk">Got it 🤫</button></div>`);
+  $('#mOk').onclick=closeModal;
+}
+function showWin(pid){
+  const p=G.players[pid];
+  modal(`<h2>🏆 ${p.name} WINS!</h2>
+    <div style="width:130px;margin:6px auto">${avatarSVG(pid,false)}</div>
+    <p class="mtext">All the other kittens went kaboom. Purr-fection!</p>
+    <div class="mrow"><button class="btn big boom" id="mAgain">Play again</button><button class="btn" id="mHome">Menu</button></div>`);
+  $('#mAgain').onclick=()=>{closeModal();
+    if(MODE==='online'){OL.restart();return;}
+    startLocalGame(G.players.map(p=>({name:p.name.replace(' 🤖','')+(p.bot?' 🤖':''),bot:p.bot})));};
+  $('#mHome').onclick=()=>{closeModal();if(MODE==='online')OL.leave();show('scr-title')};
+}
+$('#btnQuit').onclick=()=>{
+  modal(`<h2>Leave the game?</h2><p class="mtext">Quitting already? How claw-ful.</p><div class="mrow"><button class="btn boom" id="mYes">I'm feline done</button><button class="btn" id="mNo">Keep playing</button></div>`);
+  $('#mYes').onclick=()=>{closeModal();if(MODE==='online')OL.leave();show('scr-title')};
+  $('#mNo').onclick=closeModal;
+};
+
+/* ---------- local action routing ---------- */
+function act(action){
+  if(MODE==='online'){OL.send(action);return;}
+  const ev=dispatch(G,action);
+  if(ev===null){renderHand();return;}
+  processEvents(ev);
+  afterChange();
+}
+
+/* ---------- follow-ups for local modes ---------- */
+function afterChange(){
+  if(!G||MODE==='online')return;
+  if(G.phase==='over')return;
+  if(G.phase==='nope'){openNopeWindow();return;}
+  if(G.phase==='defuse'){handleDefusePhase();return;}
+  if(G.phase==='insert'){handleInsertPhase();return;}
+  if(G.phase==='favorGive'){handleFavorPhase();return;}
+  // phase 'turn'
+  const cp=curP(G);
+  if(MODE==='hot'&&!cp.bot){
+    if(VIEW!==cp.id){curtainFor(cp.id,()=>{VIEW=cp.id;selected=[];renderAll();});}
+    return;
+  }
+  if(cp.bot)setTimeout(botMove,1000+Math.random()*700);
+}
+
+/* ---------- nope window ---------- */
+function chainLastActor(){const n=G.pending.nopes;return n.length?n[n.length-1]:G.pending.actor;}
+function openNopeWindow(){
+  const last=chainLastActor();
+  if(MODE==='hot'){
+    HIDE_HAND=true;renderAll();
+    const others=G.players.filter(p=>p.alive&&p.id!==last);
+    modal(`<h2>${G.pending.nopes.length%2?'Nope the Nope?':'Anyone want to NOPE?'}</h2>
+      <p class="mtext">${G.players[last].name} just played${G.pending.nopes.length?' a Nope':''}. Anyone holding a Nope card can slam it now.</p>
+      <div class="mrow">${others.map(p=>`<button class="btn sun" data-n="${p.id}">${p.name}: NOPE!</button>`).join('')}</div>
+      <div class="mrow"><button class="btn big" id="mCont">Nobody nopes — continue</button></div>
+      <p class="mtext" id="nopeErr" style="color:var(--boom-dk)"></p>`);
+    $$('#modal [data-n]').forEach(b=>b.onclick=()=>{
+      const pid=+b.dataset.n;
+      const ev=dispatch(G,{a:'nope',pid});
+      if(ev===null){$('#nopeErr').textContent=`${G.players[pid].name} has no Nope card! Nice try. 😹`;return;}
+      closeModal();processEvents(ev);afterChange();
+    });
+    $('#mCont').onclick=()=>{closeModal();HIDE_HAND=false;const ev=dispatch(G,{a:'closeNope'});processEvents(ev);afterChange();};
+    return;
+  }
+  // bots mode
+  const bots=G.players.filter(p=>p.bot&&p.alive&&p.id!==last&&p.hand.includes('NOPE'));
+  const pd=G.pending;
+  const willNope=bots.filter(b=>{
+    let pr = pd.target===b.id?.5:(pd.nopes.length?0.28:0.13);
+    if(pd.kind==='ATTACK'&&G.turn===b.id)pr=.5;
+    return Math.random()<pr;
+  });
+  const humanCan=G.players[0].alive&&last!==0&&G.players[0].hand.includes('NOPE');
+  if(willNope.length){
+    setTimeout(()=>{const ev=dispatch(G,{a:'nope',pid:willNope[0].id});processEvents(ev);afterChange();},800);
+    return;
+  }
+  if(humanCan){
+    let t=2600;
+    renderBanner(`<span class="disp" style="color:var(--boom)">NOPE?</span> You can cancel this!`);
+    modal(`<h2>Quick — Nope it?</h2><p class="mtext">${G.players[last].name} played ${pd.nopes.length?'a Nope':CARDS[pd.cards[0]].name}${pd.target===0?' <b>on YOU</b>':''}.</p>
+      <div class="mrow"><button class="btn big boom" id="mNope">NOPE! ✋</button><button class="btn" id="mLet">Let it happen</button></div>`);
+    const fin=did=>{clearTimeout(NOPE_TIMER);closeModal();
+      const ev=dispatch(G,did?{a:'nope',pid:0}:{a:'closeNope'});processEvents(ev);afterChange();};
+    NOPE_TIMER=setTimeout(()=>fin(false),t);
+    $('#mNope').onclick=()=>fin(true);
+    $('#mLet').onclick=()=>fin(false);
+    return;
+  }
+  setTimeout(()=>{const ev=dispatch(G,{a:'closeNope'});processEvents(ev);afterChange();},600);
+}
+
+/* ---------- defuse / insert / favor phases ---------- */
+function handleDefusePhase(){
+  const pid=G.pendingBoom.pid, p=G.players[pid];
+  const hasD=p.hand.includes('DEFUSE');
+  const go=(use)=>{const ev=dispatch(G,{a:'defuse',pid,use});processEvents(ev);afterChange();};
+  if(MODE==='bots'&&p.bot){setTimeout(()=>go(hasD),1200);return;}
+  const showIt=()=>{
+    modal(`<h2>💣 KABOOM KITTEN!</h2>
+    <div style="width:130px;margin:0 auto">${ART.BOOM()}</div>
+    <p class="mtext">${hasD?'Stay paws-itive — you have a <b>Defuse</b>!':'You have <b>no Defuse</b>… what a cat-astrophe.'}</p>
+    <div class="mrow">${hasD?'<button class="btn big sun" id="mDef">✂️ Defuse it!</button>':''}
+    <button class="btn ${hasD?'':'big '}boom" id="mDie">💥 Explode</button></div>`);
+    const d=$('#mDef');if(d)d.onclick=()=>{closeModal();go(true)};
+    $('#mDie').onclick=()=>{closeModal();go(false)};
+  };
+  if(MODE==='hot'&&VIEW!==pid){curtainFor(pid,()=>{VIEW=pid;renderAll();showIt();});}else showIt();
+}
+function handleInsertPhase(){
+  const pid=G.pendingBoom.pid, p=G.players[pid];
+  const go=(pos)=>{const ev=dispatch(G,{a:'insert',pid,pos});processEvents(ev);afterChange();};
+  if(MODE==='bots'&&p.bot){setTimeout(()=>go(Math.random()<.5?0:Math.floor(Math.random()*(G.deck.length+1))),900);return;}
+  const n=G.deck.length;
+  modal(`<h2>Hide the kitten</h2><p class="mtext">Secretly slide it back into the deck (${n} cards). Nobody else will know where… the purr-fect crime.</p>
+    <div class="mrow">
+      <button class="btn sun" data-p="0">On top 😈</button>
+      ${n>=1?'<button class="btn" data-p="1">2nd from top</button>':''}
+      ${n>=2?`<button class="btn" data-p="${Math.floor(n/2)}">Middle</button>`:''}
+      <button class="btn" data-p="${n}">Bottom</button>
+      <button class="btn sky" data-p="-1">Random 🎲</button>
+    </div>`);
+  $$('#modal [data-p]').forEach(b=>b.onclick=()=>{closeModal();const v=+b.dataset.p;go(v<0?null:v);});
+}
+function handleFavorPhase(){
+  const {from,to}=G.pendingFavor, p=G.players[from];
+  if(MODE==='bots'&&p.bot){
+    setTimeout(()=>{
+      const pref=['CAT_SAMOSA','CAT_DISCO','CAT_PICKLE','CAT_MELON','CAT_TACHE','SHUFFLE','FAVOR','FUTURE','SKIP','ATTACK','NOPE','DEFUSE'];
+      let idx=0,best=99;
+      p.hand.forEach((c,i)=>{const r=pref.indexOf(c);if(r<best){best=r;idx=i;}});
+      const ev=dispatch(G,{a:'give',pid:from,idx});processEvents(ev);afterChange();
+    },1100);return;
+  }
+  const showIt=()=>{
+    modal(`<h2>Favor for ${G.players[to].name}</h2><p class="mtext">Choose one of your cards to give away. Sharing is purring.</p>
+      <div class="cardpick">${p.hand.map((c,i)=>`<div data-i="${i}">${cardHTML(c,'mini')}</div>`).join('')}</div>`);
+    $$('#modal [data-i]').forEach(d=>d.onclick=()=>{closeModal();
+      const ev=dispatch(G,{a:'give',pid:from,idx:+d.dataset.i});processEvents(ev);
+      if(MODE==='hot'){VIEW=G.turn;curtainFor(G.turn,()=>{renderAll();afterChange();});}
+      else afterChange();
+    });
+  };
+  if(MODE==='hot'&&VIEW!==from)curtainFor(from,()=>{VIEW=from;renderAll();showIt();});
+  else showIt();
+}
+
+/* ---------- bot brain ---------- */
+function botMove(){
+  if(!G||G.phase!=='turn'||!curP(G).bot)return;
+  const b=curP(G), pid=b.id;
+  const risk=G.deck.length?(G.deck.filter(c=>c==='BOOM').length/G.deck.length):1;
+  const peek=BOT_PEEK[pid];
+  const topIsBoom=peek&&peek.deckAt===G.deck.length&&peek.cards[0]==='BOOM';
+  const has=t=>b.hand.includes(t);
+  const playIt=(cards,extra={})=>{const ev=dispatch(G,Object.assign({a:'play',pid,cards},extra));processEvents(ev);afterChange();};
+  const targets=G.players.filter(p=>p.alive&&p.id!==pid);
+  const rndT=()=>targets[Math.floor(Math.random()*targets.length)].id;
+  const bestT=()=>targets.reduce((a,p)=>p.hand.length>a.hand.length?p:a,targets[0]).id;
+  if(topIsBoom&&has('SKIP')){delete BOT_PEEK[pid];playIt(['SKIP']);return;}
+  if(topIsBoom&&has('ATTACK')){delete BOT_PEEK[pid];playIt(['ATTACK']);return;}
+  if(topIsBoom&&has('SHUFFLE')){delete BOT_PEEK[pid];playIt(['SHUFFLE']);return;}
+  if(has('FUTURE')&&!peek&&Math.random()<.55){playIt(['FUTURE']);return;}
+  if(has('ATTACK')&&(G.turnsLeft>1||risk>.22)&&Math.random()<.75){playIt(['ATTACK']);return;}
+  if(has('SKIP')&&risk>.3&&Math.random()<.6){playIt(['SKIP']);return;}
+  for(const ct of CAT_TYPES){
+    if(b.hand.filter(c=>c===ct).length>=2&&Math.random()<.45){playIt([ct,ct],{target:bestT()});return;}
+  }
+  if(has('FAVOR')&&Math.random()<.3){playIt(['FAVOR'],{target:bestT()});return;}
+  const ev=dispatch(G,{a:'draw',pid});processEvents(ev);afterChange();
+}
+/* bots remember their peeks */
+(function(){
+  const _dispatch=dispatch;
+  window.dispatch=function(g,a){
+    const ev=_dispatch(g,a);
+    if(ev)ev.forEach(e=>{
+      if(e.t==='future'&&g.players[e.pid].bot)BOT_PEEK[e.pid]={cards:e.cards,deckAt:g.deck.length};
+      if(e.t==='shuffled')Object.keys(BOT_PEEK).forEach(k=>delete BOT_PEEK[k]);
+    });
+    return ev;
+  };
+})();
+/* ================= ONLINE MODE (Firebase RTDB over REST + EventSource, host runs the deck) ================= */
+const OL=(()=>{
+  let db=null, code=null, myPid=null, isHost=false, es=null, pollIv=null, tree=null;
+  let lastSeq=-1, lastEvSeq=-1, evSeq=0, hostTimer=null, started=false, uiPhaseKey='';
+
+  const base=()=>`${db}/kaboom/rooms/${code}`;
+  async function req(method,path,body){
+    const r=await fetch(`${base()}${path}.json`,{method,body:body===undefined?undefined:JSON.stringify(body)});
+    if(!r.ok)throw new Error('Database said no ('+r.status+'). Check the URL & that the database is in test mode.');
+    return r.json();
+  }
+  const rnd=n=>Math.random().toString(36).slice(2,2+n);
+
+  function err(msg){const e=$('#onlineErr');e.style.display='block';e.textContent=msg;}
+  function friendly(e){return /fetch|network|load/i.test(e.message)?"Couldn't reach the database from this page. Heads-up: on the claude.ai-hosted version, online play is blocked by the page sandbox — use the downloadable game file for online rooms. (Bots and Pass & Play work everywhere!)":e.message;}
+  function clearErr(){$('#onlineErr').style.display='none';}
+  function normDb(){
+    let v=($('#inpDb').value||'').trim().replace(/\/+$/,'');
+    if(!/^https:\/\/.+(firebaseio\.com|firebasedatabase\.app)/.test(v)){err('That doesn\'t look like a Firebase Realtime Database URL — it should start with https:// and end with firebaseio.com or firebasedatabase.app');return null;}
+    store.set('kk_db',v);return v;
+  }
+  function myName(){const v=($('#inpNameOn').value||'').trim()||'Cat '+rnd(3).toUpperCase();store.set('kk_name',v);return v;}
+
+  /* ---------- lobby ---------- */
+  $('#btnOnline').onclick=()=>{
+    $('#inpDb').value=store.get('kk_db')||'';
+    $('#inpNameOn').value=store.get('kk_name')||'';
+    $('#onlineSetupPanel').style.display='';$('#lobbyPanel').style.display='none';clearErr();
+    show('scr-online');
+  };
+  $('#btnCreateRoom').onclick=async()=>{
+    clearErr();db=normDb();if(!db)return;
+    code=Array.from({length:4},()=>'ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
+    try{
+      await req('PUT','',{createdAt:Date.now(),status:'lobby',players:{0:{name:myName()}}});
+      myPid=0;isHost=true;enterLobby();
+    }catch(e){err(friendly(e));}
+  };
+  $('#btnJoinRoom').onclick=async()=>{
+    clearErr();db=normDb();if(!db)return;
+    code=($('#inpRoom').value||'').trim().toUpperCase();
+    if(code.length!==4){err('Room codes are 4 letters.');return;}
+    try{
+      const room=await req('GET','');
+      if(!room){err('No room with that code. Ask the host to create one first!');return;}
+      if(room.status!=='lobby'){err('That game already started. Ask for a new room!');return;}
+      const ids=Object.keys(room.players||{}).map(Number);
+      if(ids.length>=5){err('Room is full (5 players max).');return;}
+      myPid=Math.max(...ids)+1;isHost=false;
+      await req('PATCH','/players',{[myPid]:{name:myName()}});
+      enterLobby();
+    }catch(e){err(friendly(e));}
+  };
+  function enterLobby(){
+    started=false;lastSeq=-1;lastEvSeq=-1;evSeq=0;
+    $('#onlineSetupPanel').style.display='none';
+    $('#lobbyPanel').style.display='';
+    $('#lobbyCode').textContent=code;
+    $('#btnStartOnline').style.display=isHost?'':'none';
+    $('#lobbyWait').style.display=isHost?'none':'';
+    listen();
+  }
+  $('#btnStartOnline').onclick=()=>{
+    const ps=tree&&tree.players?Object.keys(tree.players).length:1;
+    if(ps<2){$('#lobbyWait').style.display='';$('#lobbyWait').textContent='You need at least 2 players!';return;}
+    startGameAsHost();
+  };
+  function startGameAsHost(){
+    const defs=Object.keys(tree.players).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
+    G=newGame(defs);MODE='online';VIEW=myPid;selected=[];
+    pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'}],{status:'playing'});
+    startedNow();
+  }
+  function startedNow(){
+    started=true;show('scr-table');renderAll();hostPhaseDuties();
+  }
+
+  /* ---------- realtime tree sync ---------- */
+  function setAtPath(obj,path,data){
+    if(path==='/'||path===''){return data;}
+    const parts=path.replace(/^\//,'').split('/');let o=obj||{};let cur=o;
+    for(let i=0;i<parts.length-1;i++){cur[parts[i]]=cur[parts[i]]||{};cur=cur[parts[i]];}
+    if(data===null)delete cur[parts[parts.length-1]];else cur[parts[parts.length-1]]=data;
+    return o;
+  }
+  function listen(){
+    stopListen();
+    try{
+      es=new EventSource(`${base()}.json`);
+      const handler=ev=>{try{const {path,data}=JSON.parse(ev.data);tree=setAtPath(tree,path,data);onTree();}catch(e){}};
+      es.addEventListener('put',handler);
+      es.addEventListener('patch',handler);
+      es.onerror=()=>{if(!pollIv){pollIv=setInterval(async()=>{try{tree=await req('GET','');onTree();}catch(e){}},2500);}};
+    }catch(e){
+      pollIv=setInterval(async()=>{try{tree=await req('GET','');onTree();}catch(e){}},2500);
+    }
+  }
+  function stopListen(){if(es){es.close();es=null;}if(pollIv){clearInterval(pollIv);pollIv=null;}}
+
+  function onTree(){
+    if(!tree){ // room deleted
+      if(started){modal('<h2>Room closed</h2><p class="mtext">The host left the game.</p><div class="mrow"><button class="btn" onclick="OL.leave();closeModal()">Menu</button></div>');}
+      return;
+    }
+    if(!started){
+      const lp=$('#lobbyPlayers');lp.innerHTML='';
+      const ps=tree.players||{};
+      Object.keys(ps).sort((a,b)=>a-b).forEach(k=>{
+        lp.insertAdjacentHTML('beforeend',`<span class="chip ${+k===myPid?'sel':''}">${ps[k].name}${+k===0?' 👑':''}</span>`);
+      });
+      if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;startedNow();}}
+      return;
+    }
+    if(isHost){drainInbox();return;} // host is source of truth for game state
+    applyRemoteGame();
+  }
+  function applyRemoteGame(){
+    const g=tree.game;
+    if(!g||g.seq==null||g.seq<=lastSeq)return;
+    lastSeq=g.seq;
+    G=JSON.parse(g.s);
+    // arrays survive JSON stringify — restore defaults just in case
+    G.players.forEach(p=>{p.hand=p.hand||[]});G.deck=G.deck||[];G.discard=G.discard||[];
+    let evs=[];
+    if(g.evSeq!=null&&g.evSeq>lastEvSeq){lastEvSeq=g.evSeq;try{evs=JSON.parse(g.ev)||[]}catch(e){}}
+    if(started){processEvents(evs);onlinePhaseUI();}
+  }
+
+  /* ---------- host duties ---------- */
+  async function pushSync(evs,extra){
+    tree=tree||{};tree.status='playing';
+    tree.game={s:JSON.stringify(G),seq:G.seq,ev:JSON.stringify(evs||[]),evSeq:++evSeq};
+    lastSeq=G.seq;lastEvSeq=evSeq;
+    try{await req('PATCH','',Object.assign({game:tree.game},extra||{}));}catch(e){logMsg('⚠️ Sync hiccup — retrying…');setTimeout(()=>pushSync([],{}),1200);}
+  }
+  const seenInbox={};
+  async function drainInbox(){
+    const ib=tree.inbox||{};
+    for(const k of Object.keys(ib)){
+      if(seenInbox[k])continue;seenInbox[k]=1;
+      const m=ib[k];
+      req('DELETE','/inbox/'+k).catch(()=>{});
+      if(m&&m.action)hostApply(m.action);
+    }
+  }
+  function hostApply(action){
+    if(!G)return;
+    const ev=dispatch(G,action);
+    if(ev===null)return;
+    if(G.phase==='nope')G.nopeUntil=Date.now()+4000;else delete G.nopeUntil;
+    pushSync(ev);
+    processEvents(ev);
+    onlinePhaseUI();
+    hostPhaseDuties();
+  }
+  function hostPhaseDuties(){
+    if(hostTimer){clearTimeout(hostTimer);hostTimer=null;}
+    if(!G||G.phase!=='nope')return;
+    const last=G.pending.nopes.length?G.pending.nopes[G.pending.nopes.length-1]:G.pending.actor;
+    const anyNoper=G.players.some(p=>p.alive&&p.id!==last&&p.hand.includes('NOPE'));
+    hostTimer=setTimeout(()=>hostApply({a:'closeNope'}),anyNoper?4000:900);
+  }
+
+  /* ---------- per-client phase UI ---------- */
+  function onlinePhaseUI(){
+    const key=G?`${G.phase}|${G.seq<0?0:''}${G.phase==='nope'?G.pending.nopes.length:''}`:'';
+    if(key!==uiPhaseKey){closeModal();uiPhaseKey=key;}
+    if(!G||G.phase==='over')return;
+    if(G.phase==='nope'){
+      const last=G.pending.nopes.length?G.pending.nopes[G.pending.nopes.length-1]:G.pending.actor;
+      if(myPid!==last&&G.players[myPid].alive&&G.players[myPid].hand.includes('NOPE')){
+        modal(`<h2>Quick — Nope it?</h2><p class="mtext">${G.players[last].name} played ${G.pending.nopes.length?'a Nope':CARDS[G.pending.cards[0]].name}${G.pending.target===myPid?' <b>on YOU</b>':''}.</p>
+          <div class="mrow"><button class="btn big boom" id="mNope">NOPE! ✋</button><button class="btn" id="mLet">Let it happen</button></div>`);
+        $('#mNope').onclick=()=>{closeModal();send({a:'nope',pid:myPid});};
+        $('#mLet').onclick=closeModal;
+      }
+      return;
+    }
+    if(G.phase==='defuse'&&G.pendingBoom.pid===myPid){
+      const hasD=G.players[myPid].hand.includes('DEFUSE');
+      modal(`<h2>💣 KABOOM KITTEN!</h2><div style="width:130px;margin:0 auto">${ART.BOOM()}</div>
+        <p class="mtext">${hasD?'Stay paws-itive — you have a <b>Defuse</b>!':'You have <b>no Defuse</b>… what a cat-astrophe.'}</p>
+        <div class="mrow">${hasD?'<button class="btn big sun" id="mDef">✂️ Defuse it!</button>':''}<button class="btn ${hasD?'':'big '}boom" id="mDie">💥 Explode</button></div>`);
+      const d=$('#mDef');if(d)d.onclick=()=>{closeModal();send({a:'defuse',pid:myPid,use:true});};
+      $('#mDie').onclick=()=>{closeModal();send({a:'defuse',pid:myPid,use:false});};
+      return;
+    }
+    if(G.phase==='insert'&&G.pendingBoom.pid===myPid){
+      const n=G.deck.length;
+      modal(`<h2>Hide the kitten</h2><p class="mtext">Secretly slide it back into the deck (${n} cards) — the purr-fect crime.</p>
+        <div class="mrow"><button class="btn sun" data-p="0">On top 😈</button>
+        ${n>=1?'<button class="btn" data-p="1">2nd from top</button>':''}
+        ${n>=2?`<button class="btn" data-p="${Math.floor(n/2)}">Middle</button>`:''}
+        <button class="btn" data-p="${n}">Bottom</button><button class="btn sky" data-p="-1">Random 🎲</button></div>`);
+      $$('#modal [data-p]').forEach(b=>b.onclick=()=>{closeModal();const v=+b.dataset.p;send({a:'insert',pid:myPid,pos:v<0?null:v});});
+      return;
+    }
+    if(G.phase==='favorGive'&&G.pendingFavor&&G.pendingFavor.from===myPid){
+      const p=G.players[myPid];
+      modal(`<h2>Favor for ${G.players[G.pendingFavor.to].name}</h2><p class="mtext">Choose one of your cards to give away. Sharing is purring.</p>
+        <div class="cardpick">${p.hand.map((c,i)=>`<div data-i="${i}">${cardHTML(c,'mini')}</div>`).join('')}</div>`);
+      $$('#modal [data-i]').forEach(d=>d.onclick=()=>{closeModal();send({a:'give',pid:myPid,idx:+d.dataset.i});});
+    }
+  }
+
+  /* ---------- public ---------- */
+  function send(action){
+    if(isHost)hostApply(action);
+    else req('PUT','/inbox/'+Date.now()+'_'+rnd(4),{pid:myPid,action}).catch(()=>logMsg('⚠️ Couldn\'t reach the room — check your internet.'));
+  }
+  function leave(){
+    stopListen();
+    if(isHost&&db&&code)req('DELETE','').catch(()=>{});
+    if(hostTimer)clearTimeout(hostTimer);
+    started=false;tree=null;G=null;MODE=null;
+  }
+  function restart(){
+    if(!isHost){logMsg('Waiting for the host to start a new round…');return;}
+    const defs=G.players.map(p=>({name:p.name}));
+    G=newGame(defs);selected=[];
+    pushSync([{t:'log',msg:'New round! Cards dealt. 🐱'}]);
+    renderAll();hostPhaseDuties();
+  }
+  return {send,leave,restart};
+})();
+</script></body></html>
