@@ -1299,13 +1299,15 @@ const OL=(()=>{
     $('#lobbyWait').style.display=isHost?'none':'';
     listen();
   }
-  $('#btnStartOnline').onclick=()=>{
-    const ps=tree&&tree.players?Object.keys(tree.players).length:1;
-    if(ps<2){$('#lobbyWait').style.display='';$('#lobbyWait').textContent='You need at least 2 players!';return;}
+  const playerCountIn=t=>t&&t.players?Object.keys(t.players).filter(k=>t.players[k]).length:0;
+  $('#btnStartOnline').onclick=async()=>{
+    let ps=playerCountIn(tree);
+    if(ps<2){try{const fresh=await req('GET','');if(fresh){tree=fresh;onTree();ps=playerCountIn(tree);}}catch(e){}}
+    if(ps<2){const w=$('#lobbyWait');w.style.display='';w.style.color='var(--boom-dk)';w.textContent='You need at least 2 players in the room to start!';return;}
     startGameAsHost();
   };
   function startGameAsHost(){
-    const defs=Object.keys(tree.players).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
+    const defs=Object.keys(tree.players).filter(k=>tree.players[k]).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
     G=newGame(defs);MODE='online';VIEW=myPid;selected=[];
     pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'}],{status:'playing'});
     startedNow();
@@ -1326,9 +1328,13 @@ const OL=(()=>{
     stopListen();
     try{
       es=new EventSource(`${base()}.json`);
-      const handler=ev=>{try{const {path,data}=JSON.parse(ev.data);tree=setAtPath(tree,path,data);onTree();}catch(e){}};
-      es.addEventListener('put',handler);
-      es.addEventListener('patch',handler);
+      es.addEventListener('put',ev=>{try{const {path,data}=JSON.parse(ev.data);tree=setAtPath(tree,path,data);onTree();}catch(e){}});
+      es.addEventListener('patch',ev=>{try{const {path,data}=JSON.parse(ev.data);
+        if(data&&typeof data==='object'){
+          const p=path==='/'?'':path.replace(/\/$/,''), isArr=Array.isArray(data);
+          for(const k of Object.keys(data)){if(isArr&&data[k]===null)continue;tree=setAtPath(tree,p+'/'+k,data[k]);}
+        }else tree=setAtPath(tree,path,data);
+        onTree();}catch(e){}});
       es.onerror=()=>{if(!pollIv){pollIv=setInterval(async()=>{try{tree=await req('GET','');onTree();}catch(e){}},2500);}};
     }catch(e){
       pollIv=setInterval(async()=>{try{tree=await req('GET','');onTree();}catch(e){}},2500);
@@ -1344,7 +1350,7 @@ const OL=(()=>{
     if(!started){
       const lp=$('#lobbyPlayers');lp.innerHTML='';
       const ps=tree.players||{};
-      Object.keys(ps).sort((a,b)=>a-b).forEach(k=>{
+      Object.keys(ps).filter(k=>ps[k]).sort((a,b)=>a-b).forEach(k=>{
         lp.insertAdjacentHTML('beforeend',`<span class="chip ${+k===myPid?'sel':''}">${ps[k].name}${+k===0?' 👑':''}</span>`);
       });
       if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;startedNow();}}
