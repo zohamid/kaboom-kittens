@@ -1257,9 +1257,12 @@ const OL=(()=>{
   }
   function myName(){const v=($('#inpNameOn').value||'').trim()||'Cat '+rnd(3).toUpperCase();store.set('kk_name',v);return v;}
 
+  const BAKED_DB='https://kaboom-kittens-default-rtdb.asia-southeast1.firebasedatabase.app';
+
   /* ---------- lobby ---------- */
   $('#btnOnline').onclick=()=>{
-    $('#inpDb').value=store.get('kk_db')||'';
+    $('#inpDb').value=BAKED_DB||store.get('kk_db')||'';
+    if(BAKED_DB)$('#onlineCfg').style.display='none';
     $('#inpNameOn').value=store.get('kk_name')||'';
     $('#onlineSetupPanel').style.display='';$('#lobbyPanel').style.display='none';clearErr();
     show('scr-online');
