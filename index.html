@@ -305,6 +305,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
       <div id="lobbyPlayers" class="chips" style="justify-content:center; margin:14px 0"></div>
       <div class="row" style="justify-content:center">
         <button class="btn big boom" id="btnStartOnline" style="display:none">Start game</button>
+        <button class="btn small" id="btnWaitMore" style="display:none">Wait for more players</button>
         <span id="lobbyWait" style="font-size:17px; color:var(--ink-soft)">Waiting for the host to start…</span>
       </div>
       <div class="note">Keep the host's window open during the game — the host's device runs the deck.</div>
@@ -370,7 +371,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   </div>
 
   <div id="modalBg"><div id="modal"></div></div>
-  <div id="pawmark">© 2026 Zoha 🐾</div>
+  <div id="pawmark">© 2026 Zoha 🐾 · build 4</div>
   <div id="fx"></div>
 </div>
 <script>
@@ -1285,13 +1286,22 @@ const OL=(()=>{
       if(room.status!=='lobby'){err('That game already started. Ask for a new room!');return;}
       const ids=Object.keys(room.players||{}).map(Number);
       if(ids.length>=5){err('Room is full (5 players max).');return;}
-      myPid=Math.max(...ids)+1;isHost=false;
-      await req('PATCH','/players',{[myPid]:{name:myName()}});
+      isHost=false;
+      const nm=myName();
+      let slot=Math.max(...ids)+1, ok=false;
+      for(let tries=0;tries<4&&!ok;tries++){
+        await req('PATCH','/players',{[slot]:{name:nm}});
+        const check=await req('GET','/players');
+        if(check&&check[slot]&&check[slot].name===nm)ok=true;
+        else slot++;
+      }
+      if(!ok){err('Couldn\'t grab a seat at the table — try joining again.');return;}
+      myPid=slot;
       enterLobby();
     }catch(e){err(friendly(e));}
   };
   function enterLobby(){
-    started=false;lastSeq=-1;lastEvSeq=-1;evSeq=0;
+    started=false;lastSeq=-1;lastEvSeq=-1;evSeq=0;waitMode=false;clearAuto();
     $('#onlineSetupPanel').style.display='none';
     $('#lobbyPanel').style.display='';
     $('#lobbyCode').textContent=code;
@@ -1300,16 +1310,60 @@ const OL=(()=>{
     listen();
   }
   const playerCountIn=t=>t&&t.players?Object.keys(t.players).filter(k=>t.players[k]).length:0;
+  let autoT=null, autoLeft=0, waitMode=false;
+  function clearAuto(){if(autoT){clearInterval(autoT);autoT=null;}}
+
+  /* Anyone can start once 2 are in the lobby. Guests ask the host's device, which runs the deck. */
   $('#btnStartOnline').onclick=async()=>{
+    clearAuto();
+    if(!isHost){
+      $('#lobbyWait').style.display='';$('#lobbyWait').textContent='Asking the host to deal…';
+      req('PATCH','',{startReq:Date.now()}).catch(()=>{
+        $('#lobbyWait').style.color='var(--boom-dk)';
+        $('#lobbyWait').textContent="Couldn't reach the room — check your connection.";
+      });
+      return;
+    }
     let ps=playerCountIn(tree);
     if(ps<2){try{const fresh=await req('GET','');if(fresh){tree=fresh;onTree();ps=playerCountIn(tree);}}catch(e){}}
-    if(ps<2){const w=$('#lobbyWait');w.style.display='';w.style.color='var(--boom-dk)';w.textContent='You need at least 2 players in the room to start!';return;}
+    if(ps<2){const w=$('#lobbyWait');w.style.display='';w.style.color='var(--boom-dk)';w.textContent='Waiting for one more player to join…';return;}
     startGameAsHost();
   };
+  $('#btnWaitMore').onclick=()=>{
+    waitMode=true;clearAuto();
+    $('#btnWaitMore').style.display='none';
+    const w=$('#lobbyWait');w.style.display='';w.style.color='var(--ink-soft)';
+    w.textContent='Holding for more players — hit Start when everyone\'s in.';
+  };
+
+  function updateLobbyControls(n){
+    const b=$('#btnStartOnline'), w=$('#lobbyWait'), wm=$('#btnWaitMore');
+    w.style.display='';w.style.color='var(--ink-soft)';
+    if(n<2){
+      clearAuto();wm.style.display='none';b.style.display='none';
+      w.textContent=isHost?'Waiting for someone to join…':'Waiting for the host to start…';
+      return;
+    }
+    b.style.display='';
+    b.textContent=isHost?'Start game now':'Start game';
+    if(!isHost){wm.style.display='none';w.textContent='Ready when you are — or wait for the host.';return;}
+    if(waitMode){wm.style.display='none';w.textContent='Holding for more players — hit Start when everyone\'s in.';return;}
+    if(!autoT){
+      autoLeft=5;wm.style.display='';
+      w.textContent=`Everyone's here — dealing in ${autoLeft}…`;
+      autoT=setInterval(()=>{
+        autoLeft--;
+        if(autoLeft<=0){clearAuto();wm.style.display='none';
+          if(!started&&playerCountIn(tree)>=2)startGameAsHost();return;}
+        w.textContent=`Everyone's here — dealing in ${autoLeft}…`;
+      },1000);
+    }
+  }
   function startGameAsHost(){
     const defs=Object.keys(tree.players).filter(k=>tree.players[k]).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
     G=newGame(defs);MODE='online';VIEW=myPid;selected=[];
-    pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'}],{status:'playing'});
+    clearAuto();
+    pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'}],{status:'playing',startReq:null});
     startedNow();
   }
   function startedNow(){
@@ -1335,10 +1389,13 @@ const OL=(()=>{
           for(const k of Object.keys(data)){if(isArr&&data[k]===null)continue;tree=setAtPath(tree,p+'/'+k,data[k]);}
         }else tree=setAtPath(tree,path,data);
         onTree();}catch(e){}});
-      es.onerror=()=>{if(!pollIv){pollIv=setInterval(async()=>{try{tree=await req('GET','');onTree();}catch(e){}},2500);}};
-    }catch(e){
-      pollIv=setInterval(async()=>{try{tree=await req('GET','');onTree();}catch(e){}},2500);
-    }
+      es.onerror=()=>startPolling(1500);
+    }catch(e){startPolling(1500);}
+    startPolling(3000); // backstop: the stream can connect and still stall
+  }
+  function startPolling(ms){
+    if(pollIv)return;
+    pollIv=setInterval(async()=>{try{const fresh=await req('GET','');if(fresh){tree=fresh;onTree();}}catch(e){}},ms);
   }
   function stopListen(){if(es){es.close();es=null;}if(pollIv){clearInterval(pollIv);pollIv=null;}}
 
@@ -1353,7 +1410,10 @@ const OL=(()=>{
       Object.keys(ps).filter(k=>ps[k]).sort((a,b)=>a-b).forEach(k=>{
         lp.insertAdjacentHTML('beforeend',`<span class="chip ${+k===myPid?'sel':''}">${ps[k].name}${+k===0?' 👑':''}</span>`);
       });
-      if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;startedNow();}}
+      if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;clearAuto();startedNow();}return;}
+      const n=playerCountIn(tree);
+      if(isHost&&tree.startReq&&n>=2){clearAuto();startGameAsHost();return;}
+      updateLobbyControls(n);
       return;
     }
     if(isHost){drainInbox();return;} // host is source of truth for game state
