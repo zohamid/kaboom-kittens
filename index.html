@@ -1,4 +1,30 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<!--
+  ============================================================================
+  KABOOM KITTENS — a fan-made card game of cats, luck and betrayal.
+  © 2026 Zoha. Original art, names and code.
+
+  One self-contained HTML file: 
+  (no build step, no dependencies, no external assets) 
+  Fonts come from Google Fonts with a full fallback stack; each
+  illustration is a separate SVG; each sound is synthesised at runtime.
+
+  HOW THIS FILE IS ORGANISED
+    1. <style>   design tokens, the oval table, cards, chat, animations
+    2. markup    one <div class="screen"> per screen: title / setup / online / help / table
+    3. ART       hand-drawn-style SVG generators + the card catalogue (CARDS)
+    4. engine    pure rules — newGame() and dispatch(state, action) -> events
+    5. UI        rendering, sound, animation, bots, pass-and-play
+    6. OL        online rooms synced through Firebase Realtime Database
+
+  THE IDEA 
+  The engine never touches the DOM. dispatch() mutates the game state and
+  returns a list of events ({t:'draw'}, {t:'steal'}, {t:'log'}, …). The UI
+  replays those events as animations, sounds and log lines. That separation
+  lets identical rules run locally against bots and remotely over the
+  network — online play simply ships the same event list to the other devices.
+  ============================================================================
+  -->
 <title>Kaboom Kittens</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Patrick+Hand&display=swap">
@@ -91,11 +117,33 @@ input[type=text]:focus-visible{outline:3px dashed var(--sky); outline-offset:2px
 .rule .mini{flex:0 0 54px}
 .rule b{font-family:var(--display); letter-spacing:.04em; font-weight:400; font-size:19px}
 .rule p{margin:2px 0 0; font-size:16.5px}
+.panel ol,.panel ul{margin:6px 0 12px; padding-left:24px}
+.panel li{margin:6px 0; font-size:16.5px; line-height:1.35}
+.panel ol li::marker{font-family:var(--display); font-size:19px; color:var(--boom-dk)}
+.panel p{margin:8px 0}
 hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; margin:16px 0}
 
 /* ---------- game table ---------- */
-#scr-table{padding:10px 10px 6px; gap:6px}
-#oppRow{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; width:100%; min-height:86px}
+#scr-table{padding:8px 10px 6px; gap:4px}
+#topbar{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; width:100%; min-height:34px}
+
+/* the round table itself */
+#tableMid{flex:1; position:relative; width:100%; min-height:clamp(300px,42vh,440px); display:block}
+#feltOval{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(84%,640px); height:min(86%,430px); border-radius:50%;
+  background:radial-gradient(ellipse at 50% 38%, #1e7a6b 0%, #14655a 55%, #0f5049 100%);
+  border:9px solid #6b4a2f;
+  box-shadow:inset 0 0 70px rgba(0,0,0,.4), inset 0 6px 0 rgba(255,255,255,.06),
+             0 10px 0 rgba(0,0,0,.22), 0 0 0 3px #2a211c;
+}
+#centerPiles{
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  display:flex; gap:clamp(14px,4vw,40px); align-items:center; z-index:3;
+}
+/* the seat ring shares the oval's geometry, so chairs land on the rim */
+#seats{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(84%,640px); height:min(86%,430px); z-index:4; pointer-events:none}
 .opp{
   background:var(--paper); border:3px solid var(--ink); border-radius:16px 19px 15px 18px;
   padding:6px 12px 5px; text-align:center; box-shadow:var(--shadow); position:relative; min-width:96px;
@@ -104,7 +152,14 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .opp .avatar{width:46px; height:46px; margin:0 auto}
 .opp .nm{font-family:var(--display); font-size:16px; letter-spacing:.05em; max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .opp .cards{font-size:14px; color:var(--ink-soft)}
-.opp.turn{transform:translateY(-4px); border-color:var(--boom)}
+.opp.turn{border-color:var(--boom)}
+/* a chair at the rim of the table */
+.seat{position:absolute; transform:translate(-50%,-50%); transition:transform .25s, box-shadow .25s; min-width:0; padding:5px 10px 4px}
+.seat.turn{transform:translate(-50%,-50%) scale(1.07); box-shadow:0 5px 0 rgba(20,12,8,.35), 0 0 0 4px rgba(255,197,61,.5)}
+.seat .avatar{width:40px; height:40px}
+.seat .nm{font-size:14px; max-width:92px}
+.seat .cards{font-size:12.5px}
+.seat.mine{border-color:var(--sky); background:#fffaf0}
 .opp.turn::after{content:""; position:absolute; inset:-7px; border:3px dashed var(--sun); border-radius:20px; pointer-events:none; animation:spinB 6s linear infinite}
 @keyframes spinB{to{transform:rotate(0.001deg)}}
 .opp.dead{opacity:.55; filter:grayscale(.9)}
@@ -129,22 +184,23 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #discardPile .card:nth-last-child(3){transform:rotate(5deg)}
 
 #banner{
-  position:absolute; top:2px; left:50%; transform:translateX(-50%); z-index:6; max-width:94%;
+  max-width:94%;
   background:var(--ink); color:var(--paper); border-radius:999px; padding:6px 18px;
   font-size:17px; text-align:center; box-shadow:0 3px 0 rgba(0,0,0,.3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 #banner .disp{color:var(--sun)}
 #attackBadge{
-  position:absolute; bottom:6px; left:50%; transform:translateX(-50%) rotate(-3deg); z-index:6;
+  transform:rotate(-3deg);
   background:var(--boom); color:#fff; border:3px solid var(--ink); font-family:var(--display);
   padding:3px 14px; border-radius:12px 15px 11px 14px; letter-spacing:.05em; display:none;
 }
 
 /* ---------- log ---------- */
-#logbar{width:min(680px,96vw); height:44px; overflow:hidden; position:relative}
+#logbar{width:min(680px,96vw); min-height:46px; margin-top:4px; z-index:5; overflow:hidden; position:relative; display:flex; align-items:center; justify-content:center}
 #logbar .entry{
-  position:absolute; width:100%; text-align:center; color:var(--paper); font-size:16px;
-  text-shadow:0 2px 0 rgba(0,0,0,.4); transition:all .35s; opacity:.95;
+  position:absolute; left:0; right:0; margin:auto; text-align:center; color:var(--paper); font-size:16px;
+  line-height:1.2; padding:0 8px; text-shadow:0 2px 0 rgba(0,0,0,.45); transition:all .3s; opacity:.95;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
 
 /* ---------- hand ---------- */
@@ -228,12 +284,18 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .futureFan .slot .lab{font-family:var(--display); font-size:14px; color:var(--ink-soft); margin-top:6px}
 
 @media (max-width:620px){
+  #feltOval,#seats{width:94%; height:88%}
+  #feltOval{border-width:7px}
+  .seat .avatar{width:32px; height:32px}
+  .seat .nm{font-size:12.5px; max-width:74px}
+  .seat .cards{font-size:11px}
+  .seat{padding:4px 7px 3px}
   .card{width:96px; height:136px}
   .card .cdesc{font-size:10px; min-height:24px}
   .card .art svg{max-height:64px}
   #hand .card{margin-right:-40px}
   .pile{width:96px; height:136px}
-  #tableMid{min-height:150px}
+  #tableMid{min-height:clamp(250px,38vh,330px)}
 }
 /* ---------- deck strip (hide the kitten) ---------- */
 .deckStrip{display:flex; align-items:center; overflow-x:auto; padding:14px 6px 10px; gap:0; background:var(--paper-dim); border:3px solid var(--ink); border-radius:14px; margin:10px 0}
@@ -355,39 +417,101 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     <div class="backrow"><button class="btn small ghost backBtn">&larr; Back</button></div>
     <div class="panel">
       <h2>How to Play</h2>
-      <p><b class="disp" style="color:var(--boom-dk)">The idea:</b> take turns drawing cards. Hidden in the deck are <b>Kaboom Kittens</b>. Draw one and you explode — you're out! Unless you have a <b>Defuse</b>… The last player alive wins.</p>
-      <p><b class="disp">On your turn:</b> play as many cards as you like (or none), then <b>draw one card</b> to end your turn. That's it — no kitten!</p>
-      <hr class="scribble">
+      <div class="note" style="border-color:var(--boom); font-size:17px">
+        <b>In one line:</b> take turns drawing cards, and don't be the one who draws a Kaboom Kitten.
+        Last cat standing wins.
+      </div>
+
+      <h3>Your turn, step by step</h3>
+      <ol>
+        <li><b>Play cards</b> — as many as you like, or none at all. Attack, Skip, Favor, Shuffle,
+          See the Future, or a cat combo. This part is completely optional.</li>
+        <li><b>Draw one card.</b> This <i>ends your turn</i> — even if you already played something.
+          It's the step everyone forgets, so the game nudges you when you're standing there mid-turn.</li>
+      </ol>
+      <p>That's the entire loop. Everything else is just the trouble you cause in step 1.</p>
+
+      <h3>The moment of truth</h3>
+      <p>If the card you draw is a <b style="color:var(--boom-dk)">Kaboom Kitten</b>, you explode and
+      you're out of the game — <i>unless</i> you're holding a <b style="color:#2f7d3f">Defuse</b>.
+      Play it and you survive. Then you secretly slide that kitten back into the deck <i>anywhere you
+      like</i>: right on top for the very next player 😈, buried at the bottom, or somewhere in the
+      middle. Nobody sees where it went.</p>
+
+      <h3>The cards</h3>
       <div id="ruleCards"></div>
-      <hr class="scribble">
+
       <h3>Cat combos</h3>
-      <div class="rule"><div class="mini" id="rc-pair"></div><div><b>Two matching cats</b><p>Steal a random card from any player.</p></div></div>
-      <div class="rule"><div class="mini" id="rc-trip"></div><div><b>Three matching cats</b><p>Name a card type — if that player has one, they must hand it over.</p></div></div>
+      <p>Cat cards have no power on their own — they're only worth anything in matching sets.</p>
+      <div class="rule"><div class="mini" id="rc-pair"></div><div><b>Two matching cats</b><p>Steal a random card from any player. You don't get to choose which one.</p></div></div>
+      <div class="rule"><div class="mini" id="rc-trip"></div><div><b>Three matching cats</b><p>Name a card type — if that player has one, they must hand it over. Great for stealing a Defuse.</p></div></div>
       <div class="rule"><div class="mini" id="rc-five"></div><div><b>Five different cats</b><p>Take any card you want from the discard pile.</p></div></div>
+
       <h3>The cat families</h3>
+      <p>Ten families exist, and each game deals a random five — so the cast changes every round.
+      The log tells you who turned up.</p>
       <div id="catZoo" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"></div>
-      <hr class="scribble">
-      <p><b class="disp">Setup:</b> everyone starts with 7 cards + 1 Defuse. The deck holds one fewer Kaboom Kitten than there are players — so someone <i>will</i> find one eventually.</p>
-      <p><b class="disp">Noping a Nope</b> turns it into a "Yup" — the original card happens after all. Nopes can stack forever.</p>
+
+      <h3>Nope — the card everyone argues about</h3>
+      <ul>
+        <li>You may play a Nope <b>at any time</b>, even when it isn't your turn.</li>
+        <li>It cancels the card that was just played, as though it never happened.</li>
+        <li>A Nope played on a Nope becomes a <b>"Yup"</b> — the original card happens after all.
+          They can stack as long as people keep having them.</li>
+        <li>You <b>cannot</b> Nope a Kaboom Kitten or a Defuse. Those always happen.</li>
+      </ul>
+
+      <h3>Attack — the mean one</h3>
+      <p>Attack ends your turn <i>immediately, without drawing</i>, and forces the next player to take
+      <b>two</b> turns. If they Attack back before drawing, it piles up: 2 turns, then 4, then 6…
+      Someone eventually has to draw all of them.</p>
+
+      <h3>How the deck is stacked</h3>
+      <p>Everyone starts with 7 cards plus one guaranteed Defuse. The deck then holds exactly
+      <b>one fewer Kaboom Kitten than there are players</b> — which is why the game always ends with
+      exactly one survivor, and why someone <i>will</i> find one eventually.</p>
+
+      <h3>Three ways to play</h3>
+      <ul>
+        <li><b>Vs Bots</b> — you against up to four scheming robot cats. No setup.</li>
+        <li><b>Pass &amp; Play</b> — one device passed around a real table; a curtain hides each hand
+          between turns.</li>
+        <li><b>Online</b> — share a 4-letter room code and everyone plays from their own phone, with
+          table chat 💬 and emoji reactions.</li>
+      </ul>
+
+      <h3>A few dirty tricks</h3>
+      <ul>
+        <li>See the Future, <i>then</i> Attack — hand the danger to somebody else without touching it.</li>
+        <li>Save a Nope for the moment someone Favors you when you're down to two cards.</li>
+        <li>Defusing? Putting the kitten on top is brutal — but if they hold a Defuse, you've just
+          armed them and moved it right back toward you.</li>
+        <li>Watch the deck counter. Three cards left with two kittens still in there is a bad place to be.</li>
+      </ul>
     </div>
   </div>
 
   <!-- ============ TABLE ============ -->
   <div class="screen" id="scr-table">
-    <div id="oppRow"></div>
-    <div id="tableMid">
+    <div id="topbar">
       <div id="banner">Welcome!</div>
-      <div class="pile" id="deckPile">
-        <div class="plabel">DRAW</div>
-        <div class="stackghost"></div>
-        <div class="count" id="deckCount">0</div>
-      </div>
-      <div class="pile" id="discardPile">
-        <div class="plabel">DISCARD</div>
-        <div class="stackghost"></div>
-        <div class="count" id="discardCount">0</div>
-      </div>
       <div id="attackBadge">2 TURNS!</div>
+    </div>
+    <div id="tableMid">
+      <div id="feltOval"></div>
+      <div id="seats"></div>
+      <div id="centerPiles">
+        <div class="pile" id="deckPile">
+          <div class="plabel">DRAW</div>
+          <div class="stackghost"></div>
+          <div class="count" id="deckCount">0</div>
+        </div>
+        <div class="pile" id="discardPile">
+          <div class="plabel">DISCARD</div>
+          <div class="stackghost"></div>
+          <div class="count" id="discardCount">0</div>
+        </div>
+      </div>
     </div>
     <div id="logbar"></div>
     <div id="handWrap">
@@ -421,7 +545,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     </div>
   </div>
   <div id="modalBg"><div id="modal"></div></div>
-  <div id="pawmark">© 2026 Zoha 🐾 · build 6</div>
+  <div id="pawmark">© 2026 Zoha 🐾 · build 9</div>
   <div id="fx"></div>
 </div>
 <script>
@@ -630,7 +754,25 @@ const CARDS={
   CAT_UNCLE: {name:'Auto-Uncle Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'Meter down? Nahi jaayenge. Play matching cats as combos!'},
 };
 const CAT_TYPES=Object.keys(CARDS).filter(k=>CARDS[k].cat);
-/* ================= GAME ENGINE (pure rules; mutate state + emit events) ================= */
+/* ============================================================================
+   GAME ENGINE — pure rules. No DOM, no timers, no network.
+
+   newGame(playerDefs)      -> a fresh game state
+   dispatch(state, action)  -> array of events, or null if the action is illegal
+
+   State shape:
+     players[]  {id, name, bot, alive, hand[]}
+     cats[]     the 5 cat families dealt into this game (of the 10 that exist)
+     deck[]     face-down draw pile; the TOP of the deck is the END of the array
+     discard[]  played cards, most recent last
+     turn       whose turn it is; turnsLeft counts Attack stacking
+     phase      'turn' | 'nope' | 'defuse' | 'insert' | 'favorGive' | 'over'
+     seq        increments on every applied action (online clients use it to
+                ignore state they have already seen)
+
+   Callers must treat a null return as "that move wasn't allowed" and change
+   nothing — this is what stops a desynced or malicious client corrupting a game.
+   ============================================================================ */
 function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
 function newGame(playerDefs){
@@ -736,6 +878,8 @@ function dispatch(G,a){
       if(G.phase!=='nope')return null;
       const pd=G.pending; G.pending=null;
       const actor=G.players[pd.actor];
+      /* Nope parity: 1 nope cancels, 2 make a "Yup" and it happens after all,
+         3 cancel again… so an odd number of nopes means the card fizzles. */
       if(pd.nopes.length%2===1){
         G.phase='turn';
         emit(G,{t:'fizzle',kind:pd.kind});
@@ -834,7 +978,9 @@ function dispatch(G,a){
     }
     case 'insert':{
       if(G.phase!=='insert'||a.pid!==G.pendingBoom.pid)return null;
-      let pos=a.pos; // 0 = top of deck
+      /* pos counts from the TOP of the deck (0 = next card drawn). The deck
+         array stores the top at the end, so we splice from the far side. */
+      let pos=a.pos;
       if(pos==null||pos<0||pos>G.deck.length)pos=Math.floor(Math.random()*(G.deck.length+1));
       G.deck.splice(G.deck.length-pos,0,'BOOM');
       G.pendingBoom=null;
@@ -859,7 +1005,22 @@ function dispatch(G,a){
   G.seq++;
   return G.ev;
 }
-/* ================= UI + LOCAL MODES (bots / pass-and-play) ================= */
+/* ============================================================================
+   UI LAYER — everything the player sees, hears and clicks.
+
+   Owns: screen switching, the oval table, the card fan, modals, the synthesised
+   sound kit, animations, the bot brain, and the pass-and-play hot seat.
+
+   Key globals:
+     MODE   'bots' | 'hot' | 'online'
+     G      the current game state (from the engine)
+     VIEW   which player this screen belongs to. In pass-and-play it changes as
+            the device is handed over; online it is fixed to your own seat. The
+            table is always drawn with VIEW seated at the bottom.
+
+   act() is the single entry point for a move: locally it calls the engine
+   directly, online it hands the action to OL to route through the host.
+   ============================================================================ */
 const $=q=>document.querySelector(q), $$=q=>[...document.querySelectorAll(q)];
 let MODE=null, G=null, VIEW=0, HIDE_HAND=false, selected=[], SND=true, BOT_PEEK={}, NOPE_TIMER=null, NUDGE=false;
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
@@ -1023,17 +1184,28 @@ const AV_COLORS=['#ffc53d','#ff8fb5','#3fb0d8','#9b7ede','#58b368'];
 function avatarSVG(pid,dead){return svgWrap(catHead(50,54,30,AV_COLORS[pid%5],dead?'zen':'happy'));}
 
 function renderAll(){renderOpps();renderPiles();renderHand();renderBanner();}
+const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+/* Everyone gets a chair around the oval — you always sit at the bottom. */
 function renderOpps(){
-  const row=$('#oppRow'); row.innerHTML='';
+  const s=$('#seats'); if(!s)return;
+  s.innerHTML='';
+  const n=G.players.length;
   G.players.forEach(p=>{
-    if(p.id===VIEW)return;
-    row.insertAdjacentHTML('beforeend',`
-      <div class="opp ${p.id===G.turn&&p.alive?'turn':''} ${p.alive?'':'dead'} ${p.id===VIEW?'me':''}" id="opp${p.id}">
-        <div class="avatar">${avatarSVG(p.id,!p.alive)}</div>
-        <div class="nm">${p.name}</div>
-        <div class="cards">${p.alive?p.hand.length+' cards':''}</div>
-        ${p.alive?'':'<div class="boomtag">💥</div>'}
-      </div>`);
+    const rel=(((p.id-VIEW)%n)+n)%n;                 // 0 = me, then clockwise
+    const a=(90+rel*(360/n))*Math.PI/180;            // 90deg = bottom of the table
+    const narrow=window.innerWidth<620;
+    const rx=narrow?38:50, ry=narrow?48:52;      // % of the oval — 50 sits right on the rim
+    const me=p.id===VIEW;
+    const el=document.createElement('div');
+    el.className='opp seat'+(p.id===G.turn&&p.alive?' turn':'')+(p.alive?'':' dead')+(me?' mine':'');
+    el.id='opp'+p.id;
+    el.style.left=(50+rx*Math.cos(a))+'%';
+    el.style.top=(50+(me?ry*0.86:ry)*Math.sin(a))+'%';   // your own chair tucks just inside the rim
+    el.innerHTML='<div class="avatar">'+avatarSVG(p.id,!p.alive)+'</div>'+
+      '<div class="nm">'+(me?'You':esc(p.name))+'</div>'+
+      '<div class="cards">'+(p.alive?p.hand.length+' cards':'out')+'</div>'+
+      (p.alive?'':'<div class="boomtag">💥</div>');
+    s.appendChild(el);
   });
 }
 function renderPiles(){
@@ -1108,12 +1280,22 @@ function renderBanner(msg){
     : `<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span> Play cards or draw to end your turn.`;
   else b.innerHTML=`<span class="disp">${cp.name}</span> is ${cp.bot?'plotting…':'playing…'}`;
 }
-function logMsg(m){
+/* Messages queue up and take turns — several events often land in the same instant. */
+const logQ=[]; let logBusy=false;
+function logMsg(m){logQ.push(m); if(!logBusy){logBusy=true; pumpLog();}}
+function pumpLog(){
+  if(!logQ.length){logBusy=false;return;}
   const bar=$('#logbar');
-  const old=bar.querySelector('.entry');
-  if(old){old.style.opacity=0;old.style.transform='translateY(-18px)';setTimeout(()=>old.remove(),350);}
-  const e=document.createElement('div');e.className='entry';e.textContent=m;e.style.transform='translateY(18px)';e.style.opacity=0;
-  bar.appendChild(e);requestAnimationFrame(()=>{e.style.transform='translateY(6px)';e.style.opacity=1;});
+  bar.querySelectorAll('.entry').forEach(old=>{
+    old.style.opacity=0; old.style.transform='translateY(-16px)';
+    setTimeout(()=>old.remove(),300);
+  });
+  const e=document.createElement('div');
+  e.className='entry'; e.textContent=logQ.shift();
+  e.style.transform='translateY(16px)'; e.style.opacity=0;
+  bar.appendChild(e);
+  requestAnimationFrame(()=>{e.style.transform='translateY(0)'; e.style.opacity=1;});
+  setTimeout(pumpLog, logQ.length>3?480:1000);   // catch up when events pile in
 }
 
 /* ---------- fx ---------- */
@@ -1185,7 +1367,9 @@ function pickCardType(title,keys,cb){
   $('#mCancel').onclick=closeModal;
 }
 
-/* ---------- event stream → fx + follow-ups ---------- */
+/* Replay one batch of engine events as sound, animation and commentary.
+   Private lines (what you drew, what was stolen from you) are shown only to the
+   player they belong to by checking against VIEW. */
 function processEvents(evs){
   evs.forEach(e=>{
     switch(e.t){
@@ -1245,7 +1429,6 @@ $('#btnQuit').onclick=()=>{
 /* ---------- chat & reactions ---------- */
 const REACTS=['😹','😱','😾','👏','🔥','💣','🙀','😼'];
 let chatUnread=0;
-function chatAvailable(){return MODE==='online';}
 function setupChatUI(){
   const bar=$('#reactBar');
   bar.innerHTML=REACTS.map(r=>`<button data-r="${r}">${r}</button>`).join('');
@@ -1304,6 +1487,9 @@ function act(action){
 }
 
 /* ---------- follow-ups for local modes ---------- */
+/* Drive whatever has to happen next in a LOCAL game: open the nope window, ask
+   the exploding player to defuse, hand the device on, or let a bot think.
+   Online games are driven by OL instead. */
 function afterChange(){
   if(!G||MODE==='online')return;
   if(G.phase==='over')return;
@@ -1448,6 +1634,9 @@ function handleFavorPhase(){
 }
 
 /* ---------- bot brain ---------- */
+/* Bot brain: peek-aware and mildly self-preserving. It plays around a known
+   Kaboom Kitten (Skip/Attack/Shuffle), uses See the Future, farms cat pairs and
+   otherwise draws. Deliberately imperfect — it should lose sometimes. */
 function botMove(){
   if(!G||G.phase!=='turn'||!curP(G).bot)return;
   const b=curP(G), pid=b.id;
@@ -1484,9 +1673,32 @@ function botMove(){
   };
 })();
 
+let rzT=null;
+window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(G)renderOpps();},180);});
+
 /* boot the chat / reaction controls once the DOM is in place */
 setupChatUI();
-/* ================= ONLINE MODE (Firebase RTDB over REST + EventSource, host runs the deck) ================= */
+/* ============================================================================
+   ONLINE MODE — rooms synced through Firebase Realtime Database.
+
+   Model: the HOST's device is authoritative. It owns the real game state and is
+   the only one that calls the engine. Guests send actions to /inbox; the host
+   drains that inbox, applies each action, and publishes the resulting state and
+   event list back to the room. Everyone else just renders what they receive.
+   That's why the host has to keep their window open.
+
+   Room shape in the database:
+     /kaboom/rooms/<CODE>
+       status    'lobby' | 'playing'
+       players   {0:{name}, 1:{name}, …}
+       startReq  a guest asking the host to deal
+       game      {s: JSON state, seq, ev: JSON events, evSeq}
+       inbox     guest actions waiting for the host
+       chat      messages and emoji reactions from anyone
+
+   Transport: an EventSource stream for instant updates, plus a slower polling
+   backstop in case that stream connects and then silently stalls.
+   ============================================================================ */
 const OL=(()=>{
   let db=null, code=null, myPid=null, isHost=false, es=null, pollIv=null, tree=null;
   let lastSeq=-1, lastEvSeq=-1, evSeq=0, hostTimer=null, started=false, uiPhaseKey='';
@@ -1639,6 +1851,11 @@ const OL=(()=>{
     try{
       es=new EventSource(`${base()}.json`);
       es.addEventListener('put',ev=>{try{const {path,data}=JSON.parse(ev.data);tree=setAtPath(tree,path,data);onTree();}catch(e){}});
+      /* Firebase 'patch' events are a MERGE, not a replace: when a second
+         player joins we receive {"1":{name}} for /players and must add that key
+         rather than overwrite the whole node. Getting this wrong silently makes
+         the host see only the newest player. Note Firebase also returns
+         integer-keyed objects as sparse arrays, hence the null skip. */
       es.addEventListener('patch',ev=>{try{const {path,data}=JSON.parse(ev.data);
         if(data&&typeof data==='object'){
           const p=path==='/'?'':path.replace(/\/$/,''), isArr=Array.isArray(data);
@@ -1706,6 +1923,7 @@ const OL=(()=>{
       if(m&&m.action)hostApply(m.action);
     }
   }
+  /* Host only: apply one action to the real game and publish the result. */
   function hostApply(action){
     if(!G)return;
     const ev=dispatch(G,action);
@@ -1772,7 +1990,7 @@ const OL=(()=>{
     if(!c){chatPrimed=true;return;}   // nothing yet: we're primed for whatever comes next
     const keys=Object.keys(c).sort();
     keys.forEach(k=>{
-      if(seenChat[k])return;
+      if(seenChat[k])return;   // already rendered
       seenChat[k]=1;
       if(!chatPrimed)return;            // don't replay history on join
       const m=c[k]; if(!m)return;
