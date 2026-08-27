@@ -6,7 +6,7 @@
 
   One self-contained HTML file: no build step, no dependencies, no external
   assets. Fonts come from Google Fonts with a full fallback stack; every
-  illustration is generated SVG and every sound is synthesised at runtime.
+  illustration is SVG and every sound is synthesised at runtime.
 
   HOW THIS FILE IS ORGANISED
     1. <style>   design tokens, the oval table, cards, chat, animations
@@ -16,7 +16,48 @@
     5. UI        rendering, sound, animation, bots, pass-and-play
     6. OL        online rooms synced through Firebase Realtime Database
 
-  THE ONE IDEA WORTH KNOWING
+  ---------------------------------------------------------------------------
+  DEBUGGING CHEAT SHEET — paste these into the browser console while playing
+  ---------------------------------------------------------------------------
+    G                          the whole game state (see the engine section)
+    G.players                  every player: {id,name,bot,alive,hand[]}
+    G.players[0].hand          one player's cards
+    G.deck                     draw pile; the LAST item is the top card
+    G.cats                     which 5 cat families were dealt this game
+    G.phase                    'turn'|'nope'|'defuse'|'insert'|'favorGive'|'over'
+    G.turn / G.turnsLeft       whose turn, and how many turns they owe
+    MODE / VIEW                'bots'|'hot'|'online', and which seat is yours
+
+    renderAll()                force a full redraw
+    dispatch(G,{a:'draw',pid:0})       apply a move by hand (local games)
+    act({a:'draw',pid:VIEW})           the same, routed correctly in any mode
+    logMsg('hello',0)                  push a log line in player 0's colour
+    floatReaction('Me','\u{1F639}',0)      fire a reaction animation
+    playCardSound('CAT_CHAI')          audition any card's sound
+    openInsertPicker(20,p=>console.log(p))   open the hide-the-kitten UI
+    ac().state                 'running' means audio is unlocked; 'suspended'
+                               means no sound will play until you click once
+
+    localStorage.kk_room       saved ONLINE session (rejoin after reload)
+    localStorage.kk_local      saved LOCAL game snapshot
+    localStorage.kk_snd        '0' = muted     kk_sort '0' = unsorted hand
+    localStorage.clear()       forget everything and start fresh
+
+  COMMON SYMPTOMS -> WHERE TO LOOK
+    No sound at all ............ ac() is suspended; see unlockAudio()
+    Online game won't start .... updateLobbyControls() / playerCountIn()
+    A guest sees stale state ... applyRemoteGame(): it ignores seq <= lastSeq
+    Host ignores a guest move .. drainInbox() / hostApply(); dispatch() returns
+                                 null for illegal moves and is silently dropped
+    Modal vanishes instantly ... closePhaseModal(); info popups are tagged
+                                 kind='info' so phase changes don't close them
+    Log lines pile up .......... pumpLog() paces the queue; one line at a time
+    Cards look wrong after a
+    steal or sort .............. handOrder() reorders DISPLAY only; `selected`
+                                 always holds real indices into the hand
+
+  ---------------------------------------------------------------------------
+  THE ONE IDEA
   The engine never touches the DOM. dispatch() mutates the game state and
   returns a list of events ({t:'draw'}, {t:'steal'}, {t:'log'}, …). The UI
   replays those events as animations, sounds and log lines. That separation is
@@ -125,13 +166,18 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 
 /* ---------- game table ---------- */
 #scr-table{padding:8px 10px 6px; gap:4px}
-#topbar{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; width:100%; min-height:34px}
+#topbar{display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap;
+  width:100%; min-height:34px; position:relative; z-index:8}
 
 /* the round table itself */
-#tableMid{flex:1; position:relative; width:100%; min-height:clamp(300px,42vh,440px); display:block}
+/* The oval is deliberately SMALLER than #tableMid. Chairs are centred on its
+   rim, so each one sticks out by half its own height — that overhang needs to
+   live inside #tableMid, or seats collide with the banner above and the log
+   below. Roughly: oval height 74% leaves ~13% of clear air top and bottom. */
+#tableMid{flex:1; position:relative; width:100%; min-height:clamp(330px,46vh,470px); display:block}
 #feltOval{
   position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:min(84%,640px); height:min(86%,430px); border-radius:50%;
+  width:min(80%,620px); height:min(74%,376px); border-radius:50%;
   background:radial-gradient(ellipse at 50% 38%, #1e7a6b 0%, #14655a 55%, #0f5049 100%);
   border:9px solid #6b4a2f;
   box-shadow:inset 0 0 70px rgba(0,0,0,.4), inset 0 6px 0 rgba(255,255,255,.06),
@@ -143,7 +189,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 }
 /* the seat ring shares the oval's geometry, so chairs land on the rim */
 #seats{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  width:min(84%,640px); height:min(86%,430px); z-index:4; pointer-events:none}
+  width:min(80%,620px); height:min(74%,376px); z-index:4; pointer-events:none}
 .opp{
   background:var(--paper); border:3px solid var(--ink); border-radius:16px 19px 15px 18px;
   padding:6px 12px 5px; text-align:center; box-shadow:var(--shadow); position:relative; min-width:96px;
@@ -154,7 +200,9 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .opp .cards{font-size:14px; color:var(--ink-soft)}
 .opp.turn{border-color:var(--boom)}
 /* a chair at the rim of the table */
-.seat{position:absolute; transform:translate(-50%,-50%); transition:transform .25s, box-shadow .25s; min-width:0; padding:5px 10px 4px}
+.seat{position:absolute; transform:translate(-50%,-50%); transition:transform .25s, box-shadow .25s;
+  min-width:0; padding:5px 10px 4px; z-index:5}
+.seat.turn{z-index:6}
 .seat.turn{transform:translate(-50%,-50%) scale(1.07); box-shadow:0 5px 0 rgba(20,12,8,.35), 0 0 0 4px rgba(255,197,61,.5)}
 .seat .avatar{width:40px; height:40px}
 .seat .nm{font-size:14px; max-width:92px}
@@ -163,8 +211,10 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .seat:not(.turn):not(.dead){opacity:.82}
 .seat.mine{background:#fffaf0}
 .seat.mine .nm{color:var(--boom-dk)}
+/* The pill floats clear ABOVE the chair (never over its border) and sits on its
+   own layer so nothing can paint on top of it. */
 .turnpill{
-  position:absolute; top:-17px; left:50%; transform:translateX(-50%); white-space:nowrap;
+  position:absolute; top:-25px; left:50%; transform:translateX(-50%); white-space:nowrap; z-index:7;
   font-family:var(--display); font-size:11.5px; letter-spacing:.09em; padding:1px 9px;
   background:var(--c,var(--sun)); color:var(--ink); border:2.5px solid var(--ink); border-radius:999px;
   box-shadow:0 2px 0 rgba(0,0,0,.35);
@@ -310,10 +360,11 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .futureFan .slot .lab{font-family:var(--display); font-size:14px; color:var(--ink-soft); margin-top:6px}
 
 @media (max-width:620px){
-  #reactRail{right:4px}
-  #reactToggle{width:40px; height:40px; font-size:20px}
+  #sideRail{right:4px; top:34%; gap:7px}
+  .railBtn{width:34px; height:34px; font-size:16px}
+  .railBtn.big{width:42px; height:42px; font-size:21px}
   #reactBar button{font-size:19px}
-  #feltOval,#seats{width:94%; height:88%}
+  #feltOval,#seats{width:92%; height:74%}
   #feltOval{border-width:7px}
   .seat .avatar{width:32px; height:32px}
   .seat .nm{font-size:12.5px; max-width:74px}
@@ -337,14 +388,23 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #slotLabel{min-height:24px; font-size:16px; color:var(--boom-dk)}
 
 /* ---------- chat & reactions ---------- */
-/* Reactions live on a rail at the edge of the screen, clear of the table. */
-#reactRail{position:fixed; right:8px; top:50%; transform:translateY(-50%); z-index:58;
-  display:none; flex-direction:column; align-items:center; gap:6px}
-#reactRail.on{display:flex}
-#reactToggle{font-size:24px; line-height:1; width:48px; height:48px; border-radius:50%;
+/* Side rail: sound, table options and reactions — parked at the right edge,
+   clear of the felt so nothing ever covers the cards. */
+#sideRail{position:fixed; right:9px; top:38%; transform:translateY(-38%); z-index:58;
+  display:none; flex-direction:column; align-items:center; gap:9px}
+.railBtn{font-size:19px; line-height:1; width:40px; height:40px; border-radius:50%;
   background:var(--paper); border:3px solid var(--ink); cursor:pointer; box-shadow:0 4px 0 rgba(20,12,8,.35);
-  transition:transform .12s}
-#reactToggle:hover{transform:scale(1.08) rotate(-6deg)}
+  transition:transform .12s, opacity .12s; padding:0}
+.railBtn:hover{transform:scale(1.1) rotate(-5deg)}
+.railBtn.big{width:50px; height:50px; font-size:25px}
+.railBtn.off{opacity:.45}
+#reactWrap{display:none; flex-direction:column; align-items:center; gap:3px; position:relative}
+#reactWrap.on{display:flex}
+.railHint{font-family:var(--display); font-size:11px; letter-spacing:.1em; color:var(--paper);
+  opacity:.85; text-shadow:0 2px 0 rgba(0,0,0,.5)}
+/* a gentle wiggle the first few seconds so people notice the panel exists */
+#reactToggle.hintme{animation:railWiggle 1.6s ease-in-out 4}
+@keyframes railWiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-11deg) scale(1.07)}75%{transform:rotate(11deg) scale(1.07)}}
 #reactBar{display:none; flex-direction:column; gap:5px; padding:7px 5px; background:rgba(255,246,232,.94);
   border:3px solid var(--ink); border-radius:999px; box-shadow:0 4px 0 rgba(20,12,8,.35)}
 #reactBar.open{display:flex}
@@ -395,7 +455,28 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   font-family:var(--display); font-size:clamp(40px,11vw,62px); letter-spacing:.28em;
   color:var(--sun); text-indent:.28em; line-height:1.05;
 }
-#pawmark{position:fixed; right:10px; bottom:6px; z-index:55; font-size:12.5px; color:var(--paper); opacity:.6; font-family:var(--hand); pointer-events:none; text-shadow:0 1px 0 rgba(0,0,0,.45)}
+/* Nope countdown: a draining bar plus the seconds, so the pressure is visible. */
+.npClock{margin:10px auto 2px; width:min(320px,86%)}
+.npClock .bar{height:14px; background:var(--paper-dim); border:3px solid var(--ink); border-radius:999px; overflow:hidden}
+.npClock .bar i{display:block; height:100%; width:100%; background:var(--boom); transition:width .1s linear}
+.npClock .secs{font-family:var(--display); font-size:19px; letter-spacing:.06em; text-align:center;
+  color:var(--boom-dk); margin-top:4px}
+/* "new round" announcement */
+#announce{position:fixed; inset:0; z-index:96; display:none; align-items:center; justify-content:center; pointer-events:none}
+#announce.on{display:flex}
+#announce div{
+  font-family:var(--display); font-size:clamp(30px,8vw,60px); letter-spacing:.05em; color:var(--sun);
+  background:var(--ink); border:5px solid var(--sun); border-radius:22px; padding:14px 34px;
+  box-shadow:0 10px 0 rgba(0,0,0,.4); animation:annPop 1.9s ease-out forwards; text-align:center;
+}
+@keyframes annPop{0%{transform:scale(.4) rotate(-6deg);opacity:0}
+  18%{transform:scale(1.06) rotate(2deg);opacity:1}
+  30%{transform:scale(1) rotate(0)}
+  80%{opacity:1}100%{transform:scale(1.04);opacity:0}}
+#pawmark{position:fixed; right:8px; bottom:5px; z-index:55; font-size:11.5px; color:var(--paper); opacity:.55;
+  font-family:var(--hand); pointer-events:none; text-shadow:0 1px 0 rgba(0,0,0,.45);
+  max-width:52vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+#pawmark .bld{font-size:9.5px; opacity:.75; letter-spacing:.03em}
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
 }
@@ -417,7 +498,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
       <button class="btn big leaf" id="btnResume" style="display:none">Rejoin your game</button>
       <button class="btn ghost" id="btnHelp">How to Play</button>
     </div>
-    <div class="credit">Made by Zoha 🐾 — a fan who wanted all the kaboom with none of the cards. Original art &amp; code.</div>
+    <div class="credit">Made by Zoha 😺 — a fan who wanted all the kaboom with none of the cards. Original art &amp; code.</div>
   </div>
 
   <!-- ============ SETUP (bots / hotseat) ============ -->
@@ -593,7 +674,6 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
         <button class="btn small ghost" id="btnSort" title="Sort your hand">⇅</button>
         <button class="btn small ghost" id="btnChat" style="display:none">💬</button>
         <button class="btn small ghost" id="btnQuit">Quit</button>
-        <button class="btn small ghost" id="btnMute">🔊</button>
       </div>
     </div>
   </div>
@@ -606,9 +686,15 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     <button class="btn big sun" id="curtainBtn">I'm ready!</button>
   </div>
 
-  <div id="reactRail">
-    <button id="reactToggle" title="React">😹</button>
-    <div id="reactBar"></div>
+  <!-- Everything that isn't the game itself lives out here on the right edge. -->
+  <div id="sideRail">
+    <button class="railBtn" id="btnMute" title="Sound on/off">🔊</button>
+    <button class="railBtn" id="btnKittens" title="Show how many Kaboom Kittens are left in the deck">💣</button>
+    <div id="reactWrap">
+      <div class="railHint" id="reactHint">react</div>
+      <button class="railBtn big" id="reactToggle" title="Send a reaction">😹</button>
+      <div id="reactBar"></div>
+    </div>
   </div>
   <div id="chatPanel">
     <div id="chatHead"><span>Table talk 🐱</span><button id="chatClose">✕</button></div>
@@ -618,16 +704,22 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
       <button class="btn small sun" id="chatSend">Send</button>
     </div>
   </div>
+  <div id="announce"><div></div></div>
   <div id="modalBg"><div id="modal"></div></div>
-  <div id="pawmark">© 2026 Zoha 🐾 · build 11</div>
+  <div id="pawmark">© 2026 Zoha <span class="bld">build 13</span></div>
   <div id="fx"></div>
 </div>
 <script>
 /* ================= ORIGINAL CARD ART (hand-drawn wobbly SVG) ================= */
 const INK='#2a211c';
+/* Wrap raw SVG shapes in a scalable <svg>. Every illustration in the game is
+   built from these helpers — there are no image files anywhere. */
 function svgWrap(inner,vb='0 0 100 100'){return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;}
 
 /* a wobbly cat head. cx,cy,r ; fill ; mood: happy|angry|scared|smug|plead|zen */
+/* The one cat face used everywhere, parameterised. cx,cy = centre, r = size,
+   fill = fur colour, mood picks the eyes/mouth, extra = extra SVG on top
+   (glasses, a mustache, a party hat…). */
 function catHead(cx,cy,r,fill,mood='happy',extra=''){
   const s=r/30, I=INK;
   const earL=`M${cx-24*s} ${cy-14*s} L${cx-30*s} ${cy-34*s} L${cx-10*s} ${cy-26*s}`;
@@ -669,8 +761,10 @@ function catHead(cx,cy,r,fill,mood='happy',extra=''){
   <path d="M${cx+28*s} ${cy+4*s} L${cx+42*s} ${cy+1*s} M${cx+28*s} ${cy+9*s} L${cx+42*s} ${cy+10*s}" stroke="${I}" stroke-width="${2*s}"/>
   ${extra}`;
 }
+/* A wobbly N-point star, used for explosions and 'POW' bursts. */
 const star=(cx,cy,r,fill)=>{let p='';for(let i=0;i<10;i++){const a=Math.PI/5*i-Math.PI/2,rr=i%2?r*.45:r;p+=(i?'L':'M')+(cx+rr*Math.cos(a)).toFixed(1)+' '+(cy+rr*Math.sin(a)).toFixed(1)+' ';}return `<path d="${p}Z" fill="${fill}" stroke="${INK}" stroke-width="2.5"/>`;};
 
+/* ART[type]() returns the artwork for a card type. Keys must match CARDS. */
 const ART={
   BOOM: ()=>svgWrap(`
     ${star(50,54,46,'#ffc53d')}${star(50,54,34,'#ff5233')}
@@ -807,6 +901,9 @@ const HERO_ART=()=>svgWrap(`
   <path d="M50 22 Q46 12 56 8" stroke="#2a211c" stroke-width="3.5"/>${star(58,6,7,'#ffc53d')}`,'0 0 100 100');
 
 /* ================= CARD DEFINITIONS ================= */
+/* The card catalogue. `cat:1` marks a cat card (combo fodder, no power of its
+   own). color/tint drive the card frame; desc is shown on the card and in the
+   rules screen. Adding a cat here automatically adds it to the game. */
 const CARDS={
   BOOM:   {name:'Kaboom Kitten', color:'#d63a1f', tint:'#ffd9cf', desc:'BOOM. You explode — unless you defuse it.'},
   DEFUSE: {name:'Defuse',        color:'#2f7d3f', tint:'#d9f0dd', desc:'Snip! Survive a Kaboom Kitten & hide it back in the deck.'},
@@ -827,6 +924,7 @@ const CARDS={
   CAT_RICKSHAW:{name:'Rickshaw Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'Tring tring! Play matching cats as combos!'},
   CAT_UNCLE: {name:'Auto-Uncle Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'Meter down? Nahi jaayenge. Play matching cats as combos!'},
 };
+/* Every cat family that exists. Each game deals a random 5 of these. */
 const CAT_TYPES=Object.keys(CARDS).filter(k=>CARDS[k].cat);
 /* ============================================================================
    GAME ENGINE — pure rules. No DOM, no timers, no network.
@@ -847,8 +945,12 @@ const CAT_TYPES=Object.keys(CARDS).filter(k=>CARDS[k].cat);
    Callers must treat a null return as "that move wasn't allowed" and change
    nothing — this is what stops a desynced or malicious client corrupting a game.
    ============================================================================ */
+/* Fisher-Yates in place. Used for the deck and for picking cat families. */
 function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
+/* Build a fresh game. Deck maths mirrors the real game: everyone gets 7 cards
+   plus a guaranteed Defuse, then the remaining Defuses and exactly
+   (players - 1) Kaboom Kittens go in, so exactly one player survives. */
 function newGame(playerDefs){
   const N=playerDefs.length;
   let pool=[];
@@ -866,18 +968,23 @@ function newGame(playerDefs){
   shuffleArr(pool);
   return {players,cats,deck:pool,discard:[],turn:0,turnsLeft:1,phase:'turn',pending:null,pendingBoom:null,pendingFavor:null,winner:null,seq:0,ev:[]};
 }
+/* Players still in the game. */
 const alivePlayers=G=>G.players.filter(p=>p.alive);
+/* Whoever's turn it is. */
 const curP=G=>G.players[G.turn];
+/* Queue an event for the UI to replay. */
 function emit(G,e){G.ev.push(e);}
 /* Every log line carries the player it concerns, so the UI can colour-code it.
    kind:'turn' marks a turn change, which renders as a divider rather than a line. */
 function log(G,msg,pid,kind){emit(G,{t:'log',msg,pid:(pid==null?null:pid),kind:kind||null});}
 
+/* The next living player clockwise, skipping the dead. */
 function nextAliveIdx(G,from){
   let i=from;
   for(let k=0;k<G.players.length;k++){i=(i+1)%G.players.length; if(G.players[i].alive)return i;}
   return from;
 }
+/* Move to the next player. forcedTurns is how Attack hands over 2+ turns. */
 function advance(G,forcedTurns){
   G.turn=nextAliveIdx(G,G.turn);
   G.turnsLeft=forcedTurns||1;
@@ -885,16 +992,20 @@ function advance(G,forcedTurns){
   emit(G,{t:'turn',pid:G.turn,turnsLeft:G.turnsLeft});
   log(G,`${G.players[G.turn].name}'s turn`,G.turn,'turn');
 }
+/* One turn is done: either take another (Attack stack) or pass the baton. */
 function endOneTurn(G){ // after a draw / skip / defuse-insert
   G.turnsLeft--;
   if(G.turnsLeft>0){G.phase='turn'; emit(G,{t:'turn',pid:G.turn,turnsLeft:G.turnsLeft});}
   else advance(G);
 }
+/* One player left = game over. Returns true if it ended. */
 function checkWin(G){
   const al=alivePlayers(G);
   if(al.length===1){G.phase='over'; G.winner=al[0].id; emit(G,{t:'win',pid:al[0].id}); log(G,`🏆 ${al[0].name} wins!`,al[0].id); return true;}
   return false;
 }
+/* Remove one of each listed card. Returns false and changes NOTHING if the
+   player doesn't actually hold them — this is the anti-cheat check. */
 function removeFromHand(p,types){ // remove one instance of each listed type; return false if missing
   const copy=[...p.hand];
   for(const t of types){const i=copy.indexOf(t); if(i<0)return false; copy[i]=null;}
@@ -903,6 +1014,8 @@ function removeFromHand(p,types){ // remove one instance of each listed type; re
 }
 
 /* classify a selection of card types into a legal play */
+/* Work out what a selection of cards means: a single action card, a cat pair,
+   a cat triple, or five distinct cats. null = not a legal play. */
 function classifyPlay(types){
   if(types.length===1){
     const t=types[0];
@@ -916,8 +1029,12 @@ function classifyPlay(types){
   }
   return null;
 }
+/* These plays need a victim chosen before they can be submitted. */
 function playNeedsTarget(kind){return ['FAVOR','PAIR','TRIPLE'].includes(kind);}
 
+/* THE heart of the game. Applies one action and returns the events it caused.
+   Actions: play, nope, closeNope, draw, defuse, insert, give.
+   Returns null if the action is illegal — callers must then change nothing. */
 function dispatch(G,a){
   G.ev=[];
   const P=G.players[a.pid];
@@ -1076,6 +1193,25 @@ function dispatch(G,a){
       G.pendingFavor=null; G.phase='turn';
       break;
     }
+    /* Someone walked away. Take them out of the game cleanly: their cards go to
+       the discard pile (so the card count stays honest), anything the table was
+       waiting on them for is released, and play carries on with whoever's left.
+       If that leaves one player standing, they win. */
+    case 'leave':{
+      if(!P||!P.alive)return null;
+      P.alive=false;
+      G.discard.push(...P.hand); P.hand=[];
+      emit(G,{t:'left',pid:a.pid});
+      log(G,`🚪 ${P.name} left the table.`,a.pid);
+      if(G.pendingBoom&&G.pendingBoom.pid===a.pid){G.discard.push('BOOM');G.pendingBoom=null;G.phase='turn';}
+      if(G.pendingFavor&&(G.pendingFavor.from===a.pid||G.pendingFavor.to===a.pid)){G.pendingFavor=null;G.phase='turn';}
+      if(G.pending&&(G.pending.actor===a.pid||G.pending.target===a.pid)){G.pending=null;G.phase='turn';}
+      if(!checkWin(G)){
+        if(!G.players[G.turn].alive){G.turnsLeft=0;advance(G);}
+        else if(G.phase==='nope'&&!G.pending)G.phase='turn';
+      }
+      break;
+    }
     default:return null;
   }
   G.seq++;
@@ -1119,6 +1255,8 @@ function unlockAudio(){
   ['pointerdown','keydown','touchstart'].forEach(ev=>document.removeEventListener(ev,unlockAudio,true));
 }
 ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,unlockAudio,true));
+/* One oscillator beep. f=Hz, slide bends the pitch over the note's life.
+   Everything you hear in this game is built from tone() and noise(). */
 function tone(f,dur,type='square',vol=.16,when=0,slide=0){
   if(!SND)return; const c=ac(); if(!c)return;
   const t=c.currentTime+when, o=c.createOscillator(), g=c.createGain();
@@ -1190,7 +1328,11 @@ const sSteal=()=>{tone(880,.07,'triangle',.13,0,-260);tone(1180,.06,'triangle',.
 function playCardSound(t){const f=CARD_SOUND[t];if(f)f();else sPop();}
 
 /* ---------- screens ---------- */
-function show(id){$$('.screen').forEach(s=>s.classList.remove('on'));$('#'+id).classList.add('on');}
+/* Switch screens. Exactly one .screen carries .on at a time. */
+function show(id){
+  $$('.screen').forEach(s=>s.classList.remove('on'));$('#'+id).classList.add('on');
+  $('#sideRail').style.display=(id==='scr-table')?'flex':'none';   // rail only at the table
+}
 $('#heroArt').innerHTML=HERO_ART();
 $('#curtainArt').innerHTML=svgWrap(catHead(50,54,30,'#ffc53d','happy'));
 $$('.backBtn').forEach(b=>b.onclick=()=>{show('scr-title')});
@@ -1199,6 +1341,7 @@ $('#btnMute').onclick=()=>{SND=!SND;store.set('kk_snd',SND?'1':'0');$('#btnMute'
 };
 $('#btnMute').textContent=SND?'🔊':'🔇';
 
+/* Fill the rules screen with generated card art (runs once). */
 function renderHelp(){
   const el=$('#ruleCards'); if(el.dataset.done)return; el.dataset.done=1;
   ['BOOM','DEFUSE','ATTACK','SKIP','FAVOR','SHUFFLE','FUTURE','NOPE'].forEach(t=>{
@@ -1214,6 +1357,7 @@ function renderHelp(){
 let setupMode='bots', playerCount=3;
 $('#btnBots').onclick=()=>{setupMode='bots';openSetup()};
 $('#btnHotseat').onclick=()=>{setupMode='hot';openSetup()};
+/* The bots / pass-and-play setup screen. */
 function openSetup(){
   $('#setupTitle').textContent=setupMode==='bots'?'You vs the Bots':'Pass & Play';
   $('#cntLabel').textContent=setupMode==='bots'?'How many bots?':'How many players?';
@@ -1247,11 +1391,13 @@ $('#btnStartLocal').onclick=()=>{
   }
   startLocalGame(defs);
 };
+/* Deal a local game (bots or hot seat) and show the table. */
 function startLocalGame(defs){
   G=newGame(defs); BOT_PEEK={}; selected=[]; HIDE_HAND=false;
   showChatUI(false);
   show('scr-table');
-  sDeal();logMsg('Cards dealt. Good luck! 🐱');
+  announce('NEW ROUND!');sDeal();
+  dealAnimation(()=>logMsg('Cards dealt. Good luck! 🐱'));
   setTimeout(()=>logMsg('Today\'s cats: '+G.cats.map(c=>CARDS[c].name).join(', ')),2200);
   renderAll();
   if(MODE==='hot')curtainFor(G.turn,()=>{VIEW=G.turn;renderAll();});
@@ -1259,10 +1405,13 @@ function startLocalGame(defs){
 }
 
 /* ---------- generic modal ---------- */
+/* Show a popup. kind='phase' popups are auto-closed when the game moves on;
+   kind='info' ones stay until the player dismisses them. */
 function modal(html,kind){$('#modal').innerHTML=html;$('#modalBg').dataset.kind=kind||'phase';$('#modalBg').classList.add('on');}
 /* only auto-dismiss prompts the game itself opened — never an info popup the player is still reading */
 function closePhaseModal(){if($('#modalBg').dataset.kind!=='info')closeModal();}
 function closeModal(){$('#modalBg').classList.remove('on');}
+/* Pass-and-play privacy screen: hide the hand until the next player is ready. */
 function curtainFor(pid,cb){
   HIDE_HAND=true;renderHand();
   $('#curtainTitle').textContent=`Pass to ${G.players[pid].name}`;
@@ -1272,6 +1421,7 @@ function curtainFor(pid,cb){
 }
 
 /* ---------- rendering ---------- */
+/* One card face: name, art, description, coloured to its type. */
 function cardHTML(t,cls=''){
   const c=CARDS[t];
   return `<div class="card ${cls}" data-type="${t}" style="--cc:${c.color};--ct:${c.tint}">
@@ -1282,8 +1432,10 @@ function cardBackHTML(cls=''){return `<div class="card back ${cls}"><div class="
    dot on their log lines, their reactions and their chat messages. */
 const AV_COLORS=['#ffc53d','#ff8fb5','#3fb0d8','#9b7ede','#58b368'];
 const pColor=pid=>AV_COLORS[pid%AV_COLORS.length];
+/* The little cat portrait on a player's chair, in that player's colour. */
 function avatarSVG(pid,dead){return svgWrap(catHead(50,54,30,AV_COLORS[pid%5],dead?'zen':'happy'));}
 
+/* Redraw everything: seats, piles, hand, banner. */
 function renderAll(){renderOpps();renderPiles();renderHand();renderBanner();}
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* Everyone gets a chair around the oval — you always sit at the bottom. */
@@ -1321,12 +1473,13 @@ function renderOpps(){
     }
   });
 }
+/* Draw and discard piles, plus the deck counter and attack badge. */
 function renderPiles(){
   const dp=$('#deckPile');
   dp.querySelectorAll('.card').forEach(e=>e.remove());
   if(G.deck.length)dp.insertAdjacentHTML('beforeend',cardBackHTML());
   const booms=G.deck.filter(c=>c==='BOOM').length;
-  $('#deckCount').textContent=G.deck.length+' left'+(booms?' · 💣'+booms:'');
+  $('#deckCount').textContent=G.deck.length+' left'+(SHOW_KITTENS&&booms?' · 💣'+booms:'');
   dp.classList.toggle('mydraw',isMyTurn()&&G.phase==='turn');
   const dc=$('#discardPile');
   dc.querySelectorAll('.card').forEach(e=>e.remove());
@@ -1338,6 +1491,7 @@ function renderPiles(){
   const deckTop=dp.querySelector('.card');
   if(deckTop)deckTop.onclick=()=>{if(isMyTurn()&&G.phase==='turn')act({a:'draw',pid:VIEW});};
 }
+/* Is the person looking at this screen allowed to act right now? */
 function isMyTurn(){
   if(!G||G.phase==='over')return false;
   if(MODE==='online')return G.turn===VIEW&&!G.players[VIEW].bot;
@@ -1351,6 +1505,9 @@ function myHand(){return G.players[VIEW]?G.players[VIEW].hand:[];}
    their real index in the hand, so `selected` always stores real indices. */
 const SORT_RANK={DEFUSE:0,NOPE:1,ATTACK:2,SKIP:3,FAVOR:4,SHUFFLE:5,FUTURE:6};
 let SORT_HAND=store.get('kk_sort')!=='0';
+/* Off by default: counting kittens is part of the game. The 💣 button on the
+   side rail turns it on for anyone who'd rather see it. */
+let SHOW_KITTENS=store.get('kk_bombs')==='1';
 function handOrder(){
   const h=myHand(), idx=h.map((_,i)=>i);
   if(!SORT_HAND)return idx;
@@ -1402,6 +1559,7 @@ function toggleSel(i){
   if(k>=0)selected.splice(k,1);else selected.push(i);
   renderHand();
 }
+/* Enable/label the Play and Draw buttons for the current selection. */
 function updateHandButtons(){
   const play=$('#btnPlaySel'), draw=$('#btnDraw');
   const mine=isMyTurn()&&G.phase==='turn';
@@ -1417,6 +1575,7 @@ function updateHandButtons(){
     play.onclick=()=>beginPlay(types,cls);
   }else play.style.display='none';
 }
+/* The status line at the top: whose turn, what the game is waiting for. */
 function renderBanner(msg){
   const b=$('#banner');
   if(msg){b.innerHTML=msg;return;}
@@ -1463,7 +1622,29 @@ function pumpLog(){
 }
 
 /* ---------- fx ---------- */
+/* A big centred shout for moments that deserve one ("NEW ROUND!"). */
+function announce(text,ms){
+  const box=$('#announce'); box.firstElementChild.textContent=text;
+  box.classList.remove('on'); void box.offsetWidth; box.classList.add('on');
+  setTimeout(()=>box.classList.remove('on'),ms||1900);
+}
+/* Cards visibly fly from the deck to every chair before a round begins. */
+function dealAnimation(done){
+  const dp=$('#deckPile'); if(!dp||!G){done&&done();return;}
+  const from=rectOf(dp); let n=0;
+  G.players.forEach(p=>{
+    const seat=$('#opp'+p.id); if(!seat)return;
+    const to=rectOf(seat);
+    for(let k=0;k<3;k++){
+      const d=(n++)*85;
+      setTimeout(()=>{flyCard(cardBackHTML(),from,to,430);tone(760+Math.random()*260,.05,'sine',.07);},d);
+    }
+  });
+  setTimeout(()=>done&&done(),n*85+460);
+}
+/* Screen position of an element, used to animate cards between places. */
 function rectOf(el){const r=el.getBoundingClientRect();return r;}
+/* Animate a card from one screen position to another. */
 function flyCard(html,from,to,dur=500){
   const f=document.createElement('div');f.className='fly';f.innerHTML=html;
   const c=f.firstElementChild;
@@ -1473,10 +1654,12 @@ function flyCard(html,from,to,dur=500){
   requestAnimationFrame(()=>Object.assign(f.style,{left:to.left+'px',top:to.top+'px',width:to.width+'px',height:to.height+'px',transitionDuration:dur+'ms'}));
   setTimeout(()=>f.remove(),dur+80);
 }
+/* A card flies to the discard pile and plays its own sound. */
 function fxPlay(pid,type){
   const from=pid===VIEW?rectOf($('#hand'))||rectOf($('#discardPile')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#deckPile')));
   flyCard(cardHTML(type),from,rectOf($('#discardPile')));playCardSound(type);
 }
+/* A face-down card flies from the deck to a player. */
 function fxDraw(pid){
   const to=pid===VIEW?rectOf($('#hand')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#hand')));
   flyCard(cardBackHTML(),rectOf($('#deckPile')),to);sSwish();
@@ -1488,10 +1671,12 @@ function flash(msg){
   el.textContent=msg; el.style.color='var(--sun)';
   clearTimeout(flashT); flashT=setTimeout(()=>{el.style.color='';renderHand();},3200);
 }
+/* Full-screen flash, screen shake and a bang. */
 function fxBoom(){
   const f=document.createElement('div');f.className='boomFlash';document.body.appendChild(f);setTimeout(()=>f.remove(),950);
   document.body.classList.add('shake');setTimeout(()=>document.body.classList.remove('shake'),550);sBoom();
 }
+/* Victory confetti. */
 function fxConfetti(){
   const cols=['#ffc53d','#ff5233','#3fb0d8','#ff8fb5','#58b368','#fff6e8'];
   for(let i=0;i<70;i++){
@@ -1504,7 +1689,31 @@ function fxConfetti(){
   }
 }
 
+/* ---------- the Nope window ----------
+   Nopes are the one place the game puts you under time pressure, so make that
+   pressure visible: a draining bar and a ticking number, both in the popup and
+   in the banner for everyone who's just watching. */
+const NOPE_MS=6000;
+let npEnds=0, npTick=null;
+function startNopeClock(ms){
+  npEnds=Date.now()+ms;
+  clearInterval(npTick);
+  npTick=setInterval(()=>{
+    const left=Math.max(0,npEnds-Date.now());
+    const bar=$('#modal .npClock .bar i'), secs=$('#modal .npClock .secs');
+    if(bar)bar.style.width=(left/ms*100)+'%';
+    if(secs)secs.textContent=left>0?(left/1000).toFixed(1)+'s to decide':'too late!';
+    if(G&&G.phase==='nope'&&!$('#modalBg').classList.contains('on'))
+      renderBanner('⏳ <span class="disp">Nope window</span> — '+(left/1000).toFixed(1)+'s');
+    if(left<=0)stopNopeClock();
+  },100);
+}
+function stopNopeClock(){clearInterval(npTick);npTick=null;}
+const npClockHTML='<div class="npClock"><div class="bar"><i></i></div><div class="secs"></div></div>';
+
 /* ---------- play flows (collect params, then dispatch) ---------- */
+/* Collect anything a play still needs (a victim, a named card, a wish) and
+   then submit it. */
 function beginPlay(types,cls){
   const done=(params={})=>{selected=[];act(Object.assign({a:'play',pid:VIEW,cards:types},params));};
   if(cls.kind==='FAVOR'||cls.kind==='PAIR')pickTarget(t=>done({target:t}));
@@ -1516,6 +1725,7 @@ function beginPlay(types,cls){
   }
   else done();
 }
+/* 'Pick a victim' chooser. */
 function pickTarget(cb){
   const opts=G.players.filter(p=>p.alive&&p.id!==VIEW);
   modal(`<h2>Pick a victim</h2><p class="mtext" style="margin-top:-6px">(nothing purr-sonal)</p><div class="mrow">${opts.map(p=>`
@@ -1524,6 +1734,7 @@ function pickTarget(cb){
   $$('#modal [data-t]').forEach(b=>b.onclick=()=>{closeModal();cb(+b.dataset.t)});
   $('#mCancel').onclick=closeModal;
 }
+/* Card-type chooser, used for triples and for digging in the discard. */
 function pickCardType(title,keys,cb){
   modal(`<h2>${title}</h2><div class="cardpick">${keys.map(k=>`<div data-k="${k}">${cardHTML(k,'mini')}</div>`).join('')}</div>
   <div class="mrow"><button class="btn small" id="mCancel">Cancel</button></div>`);
@@ -1548,6 +1759,8 @@ function processEvents(evs){
       case 'boomDrawn':sUhoh();break;
       case 'inserted':sSwish();break;
       case 'defused':sDefuse();break;
+      case 'left':sSwish();break;
+      case 'newround':announce('NEW ROUND!');sDeal();dealAnimation();break;
       case 'exploded':fxBoom();if(e.pid===VIEW)setTimeout(sLose,700);break;
       case 'shuffled':sSwish();break;
       case 'steal':sSteal();
@@ -1571,12 +1784,14 @@ function processEvents(evs){
   });
   renderAll();
 }
+/* See the Future: the top three cards, for your eyes only. */
 function showFuture(cards){
   modal(`<h2>The Future…</h2><p class="mtext">Top of the deck, in draw order:</p>
     <div class="futureFan">${cards.map((c,i)=>`<div class="slot">${cardHTML(c,'mini')}<div class="lab">${['NEXT','2nd','3rd'][i]||''}</div></div>`).join('')}</div>
     <div class="mrow"><button class="btn sun" id="mOk">Got it 🤫</button></div>`,'info');
   $('#mOk').onclick=closeModal;
 }
+/* End-of-game screen with a rematch button. */
 function showWin(pid){
   const p=G.players[pid];
   modal(`<h2>🏆 ${p.name} WINS!</h2>
@@ -1589,19 +1804,31 @@ function showWin(pid){
   $('#mHome').onclick=()=>{closeModal();if(MODE==='online')OL.leave();show('scr-title')};
 }
 $('#btnQuit').onclick=()=>{
-  modal(`<h2>Leave the game?</h2><p class="mtext">Quitting already? How claw-ful.</p><div class="mrow"><button class="btn boom" id="mYes">I'm feline done</button><button class="btn" id="mNo">Keep playing</button></div>`);
-  $('#mYes').onclick=()=>{closeModal();if(MODE==='online')OL.leave();show('scr-title')};
+  const online=MODE==='online';
+  modal(`<h2>Leave the game?</h2>
+    <p class="mtext">Quitting already? How claw-ful.</p>
+    ${online?'<p class="mtext" style="font-size:16px">The others will be told, and their game carries on without you.</p>':''}
+    <div class="mrow"><button class="btn boom" id="mYes">I'm feline done</button><button class="btn" id="mNo">Keep playing</button></div>`);
+  $('#mYes').onclick=()=>{closeModal();clearLocal();if(online){OL.quit();}else{show('scr-title');}};
   $('#mNo').onclick=closeModal;
 };
 
 /* ---------- chat & reactions ---------- */
 const REACTS=['😹','😱','😾','👏','🔥','💣','🙀','😼'];
 let chatUnread=0;
+/* Wire the chat panel, the reaction rail and the hand-sort toggle. */
 function setupChatUI(){
   const bar=$('#reactBar');
   bar.innerHTML=REACTS.map(r=>`<button data-r="${r}">${r}</button>`).join('');
   $$('#reactBar button').forEach(b=>b.onclick=()=>{OL.react(b.dataset.r);bar.classList.remove('open');});
-  $('#reactToggle').onclick=()=>bar.classList.toggle('open');
+  $('#reactToggle').onclick=()=>{bar.classList.toggle('open');$('#reactToggle').classList.remove('hintme');};
+  $('#btnKittens').onclick=()=>{
+    SHOW_KITTENS=!SHOW_KITTENS;store.set('kk_bombs',SHOW_KITTENS?'1':'0');
+    $('#btnKittens').classList.toggle('off',!SHOW_KITTENS);
+    flash(SHOW_KITTENS?'Showing kittens left in the deck':'Kitten counter hidden — count them yourself 😼');
+    sPop();if(G)renderPiles();
+  };
+  $('#btnKittens').classList.toggle('off',!SHOW_KITTENS);
   $('#btnSort').onclick=()=>{
     SORT_HAND=!SORT_HAND;store.set('kk_sort',SORT_HAND?'1':'0');
     $('#btnSort').textContent=SORT_HAND?'⇅':'🔀';
@@ -1611,7 +1838,10 @@ function setupChatUI(){
   $('#btnSort').textContent=SORT_HAND?'⇅':'🔀';
   $('#btnChat').onclick=()=>{
     const p=$('#chatPanel');p.classList.toggle('on');
-    if(p.classList.contains('on')){chatUnread=0;renderChatBadge();$('#chatInput').focus();}
+    if(p.classList.contains('on')){
+      chatUnread=0;renderChatBadge();$('#chatInput').focus();
+      const l=$('#chatLog');requestAnimationFrame(()=>{l.scrollTop=l.scrollHeight;});
+    }
   };
   $('#chatClose').onclick=()=>$('#chatPanel').classList.remove('on');
   $('#chatSend').onclick=sendChat;
@@ -1627,15 +1857,19 @@ function renderChatBadge(){
 }
 function showChatUI(on){
   $('#btnChat').style.display=on?'':'none';
-  $('#reactRail').classList.toggle('on',!!on);
-  if(!on){$('#chatPanel').classList.remove('on');$('#reactBar').classList.remove('open');}
+  $('#reactWrap').classList.toggle('on',!!on);
+  if(on){                                   // wiggle once so people spot the panel
+    const t=$('#reactToggle');t.classList.remove('hintme');void t.offsetWidth;t.classList.add('hintme');
+  }else{$('#chatPanel').classList.remove('on');$('#reactBar').classList.remove('open');}
 }
+/* Append one chat message (text is inserted safely, never as HTML). */
 function addChatLine(name,text,mine){
   const log=$('#chatLog'); if(!log)return;
   const d=document.createElement('div'); d.className='msg'+(mine?' mine':'');
   const b=document.createElement('b'); b.textContent=name+': ';
   d.appendChild(b); d.appendChild(document.createTextNode(text));
-  log.appendChild(d); log.scrollTop=log.scrollHeight;
+  log.appendChild(d);
+  requestAnimationFrame(()=>{log.scrollTop=log.scrollHeight;});   // stick to the newest line
   while(log.children.length>80)log.removeChild(log.firstChild);
   if(!$('#chatPanel').classList.contains('on')){chatUnread++;renderChatBadge();}
 }
@@ -1717,6 +1951,7 @@ function afterChange(){
 
 /* ---------- nope window ---------- */
 function chainLastActor(){const n=G.pending.nopes;return n.length?n[n.length-1]:G.pending.actor;}
+/* Give everyone a chance to Nope the card that was just played. */
 function openNopeWindow(){
   const last=chainLastActor();
   if(MODE==='hot'){
@@ -1750,13 +1985,14 @@ function openNopeWindow(){
     return;
   }
   if(humanCan){
-    let t=2600;
     renderBanner(`<span class="disp" style="color:var(--boom)">NOPE?</span> You can cancel this!`);
     modal(`<h2>Quick — Nope it?</h2><p class="mtext">${G.players[last].name} played ${pd.nopes.length?'a Nope':CARDS[pd.cards[0]].name}${pd.target===0?' <b>on YOU</b>':''}.</p>
+      ${npClockHTML}
       <div class="mrow"><button class="btn big boom" id="mNope">NOPE! ✋</button><button class="btn" id="mLet">Let it happen</button></div>`);
-    const fin=did=>{clearTimeout(NOPE_TIMER);closeModal();
+    startNopeClock(NOPE_MS);
+    const fin=did=>{clearTimeout(NOPE_TIMER);stopNopeClock();closeModal();
       const ev=dispatch(G,did?{a:'nope',pid:0}:{a:'closeNope'});processEvents(ev);afterChange();};
-    NOPE_TIMER=setTimeout(()=>fin(false),t);
+    NOPE_TIMER=setTimeout(()=>fin(false),NOPE_MS);
     $('#mNope').onclick=()=>fin(true);
     $('#mLet').onclick=()=>fin(false);
     return;
@@ -1765,6 +2001,7 @@ function openNopeWindow(){
 }
 
 /* ---------- defuse / insert / favor phases ---------- */
+/* Someone drew a kitten: offer the Defuse (or let them explode). */
 function handleDefusePhase(){
   const pid=G.pendingBoom.pid, p=G.players[pid];
   const hasD=p.hand.includes('DEFUSE');
@@ -1819,6 +2056,7 @@ function handleInsertPhase(){
   if(MODE==='bots'&&p.bot){setTimeout(()=>go(Math.random()<.5?0:Math.floor(Math.random()*(G.deck.length+1))),900);return;}
   openInsertPicker(G.deck.length,go);
 }
+/* The Favor target chooses which card to hand over. */
 function handleFavorPhase(){
   const {from,to}=G.pendingFavor, p=G.players[from];
   if(MODE==='bots'&&p.bot){
@@ -1926,8 +2164,8 @@ window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(G
 /* boot the chat / reaction controls once the DOM is in place */
 setupChatUI();
 offerResume();
-/* land straight on the online screen when someone opens an invite link */
-if(new URLSearchParams(location.search).get('room'))$('#btnOnline').click();
+/* Invite links are handled by the online layer, which loads after this file —
+   see OL.openInvite(). */
 /* ============================================================================
    ONLINE MODE — rooms synced through Firebase Realtime Database.
 
@@ -1954,6 +2192,8 @@ const OL=(()=>{
   let lastSeq=-1, lastEvSeq=-1, evSeq=0, hostTimer=null, started=false, uiPhaseKey='';
 
   const base=()=>`${db}/kaboom/rooms/${code}`;
+  /* One REST call against this room. Firebase speaks plain JSON over HTTP:
+     GET reads, PUT replaces, PATCH merges, DELETE removes. */
   async function req(method,path,body){
     const r=await fetch(`${base()}${path}.json`,{method,body:body===undefined?undefined:JSON.stringify(body)});
     if(!r.ok)throw new Error('Database said no ('+r.status+'). Check the URL & that the database is in test mode.');
@@ -1962,13 +2202,16 @@ const OL=(()=>{
   const rnd=n=>Math.random().toString(36).slice(2,2+n);
 
   function err(msg){const e=$('#onlineErr');e.style.display='block';e.textContent=msg;}
+  /* Turn a network failure into something a player can act on. */
   function friendly(e){return /fetch|network|load/i.test(e.message)?"Couldn't reach the database from this page. Heads-up: on the claude.ai-hosted version, online play is blocked by the page sandbox — use the downloadable game file for online rooms. (Bots and Pass & Play work everywhere!)":e.message;}
   function clearErr(){$('#onlineErr').style.display='none';}
+  /* Validate and remember the database URL. */
   function normDb(){
     let v=($('#inpDb').value||'').trim().replace(/\/+$/,'');
     if(!/^https:\/\/.+(firebaseio\.com|firebasedatabase\.app)/.test(v)){err('That doesn\'t look like a Firebase Realtime Database URL — it should start with https:// and end with firebaseio.com or firebasedatabase.app');return null;}
     store.set('kk_db',v);return v;
   }
+  /* This player's display name (remembered between visits). */
   function myName(){const v=($('#inpNameOn').value||'').trim()||'Cat '+rnd(3).toUpperCase();store.set('kk_name',v);return v;}
 
   const seenChat={};
@@ -2017,6 +2260,7 @@ const OL=(()=>{
       enterLobby();
     }catch(e){err(friendly(e));}
   };
+  /* Show the lobby and start listening to the room. */
   function enterLobby(){
     started=false;lastSeq=-1;lastEvSeq=-1;evSeq=0;
     chatPrimed=false;Object.keys(seenChat).forEach(k=>delete seenChat[k]);$('#chatLog').innerHTML='';
@@ -2058,19 +2302,23 @@ const OL=(()=>{
       setLobbyMsg(n<2?'Waiting for more players to join…':'Waiting for the host to deal — you can nudge them.');
     }
   }
+  /* Host only: deal a new game and publish it to everyone. */
   function startGameAsHost(){
     const defs=Object.keys(tree.players).filter(k=>tree.players[k]).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
     G=newGame(defs);MODE='online';VIEW=myPid;selected=[];
-    pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'},
+    pushSync([{t:'newround'},
+              {t:'log',msg:'Cards dealt — good luck! 🐱'},
               {t:'log',msg:"Today's cats: "+G.cats.map(c=>CARDS[c].name).join(', ')}],{status:'playing',startReq:null});
     startedNow();
   }
+  /* Switch to the table once the game exists. */
   function startedNow(){
     started=true;show('scr-table');showChatUI(true);renderAll();hostPhaseDuties();
     logMsg('Tip: tap 💬 to chat, or use the emoji row to react!');
   }
 
   /* ---------- realtime tree sync ---------- */
+  /* Write a value into our local mirror of the room at a '/a/b/c' path. */
   function setAtPath(obj,path,data){
     if(path==='/'||path===''){return data;}
     const parts=path.replace(/^\//,'').split('/');let o=obj||{};let cur=o;
@@ -2078,6 +2326,7 @@ const OL=(()=>{
     if(data===null)delete cur[parts[parts.length-1]];else cur[parts[parts.length-1]]=data;
     return o;
   }
+  /* Subscribe to the room: live stream first, polling as a safety net. */
   function listen(){
     stopListen();
     try{
@@ -2098,12 +2347,16 @@ const OL=(()=>{
     }catch(e){startPolling(1500);}
     startPolling(3000); // backstop: the stream can connect and still stall
   }
+  /* Re-read the whole room on a timer. Cheap insurance against a dead stream. */
   function startPolling(ms){
     if(pollIv)return;
     pollIv=setInterval(async()=>{try{const fresh=await req('GET','');if(fresh){tree=fresh;onTree();}}catch(e){}},ms);
   }
+  /* Drop both the stream and the poll. */
   function stopListen(){if(es){es.close();es=null;}if(pollIv){clearInterval(pollIv);pollIv=null;}}
 
+  /* Called every time our copy of the room changes: update the lobby, pick up
+     new game state, drain the inbox if we're the host. */
   function onTree(){
     if(!tree){ // room deleted
       if(started){modal('<h2>Room closed</h2><p class="mtext">The host left the game.</p><div class="mrow"><button class="btn" onclick="OL.leave();closeModal()">Menu</button></div>');}
@@ -2126,6 +2379,8 @@ const OL=(()=>{
     if(isHost){drainInbox();return;} // host is source of truth for game state
     applyRemoteGame();
   }
+  /* Guest side: adopt newer state from the host and replay its events.
+     Anything with seq <= lastSeq is old news and ignored. */
   function applyRemoteGame(){
     const g=tree.game;
     if(!g||g.seq==null||g.seq<=lastSeq)return;
@@ -2139,6 +2394,7 @@ const OL=(()=>{
   }
 
   /* ---------- host duties ---------- */
+  /* Host side: publish the current state plus the events it produced. */
   async function pushSync(evs,extra){
     tree=tree||{};tree.status='playing';
     tree.game={s:JSON.stringify(G),seq:G.seq,ev:JSON.stringify(evs||[]),evSeq:++evSeq};
@@ -2147,6 +2403,7 @@ const OL=(()=>{
     try{await req('PATCH','',Object.assign({game:tree.game},extra||{}));}catch(e){logMsg('⚠️ Sync hiccup — retrying…');setTimeout(()=>pushSync([],{}),1200);}
   }
   const seenInbox={};
+  /* Host side: apply every guest action waiting in the room, then delete it. */
   async function drainInbox(){
     const ib=tree.inbox||{};
     for(const k of Object.keys(ib)){
@@ -2161,7 +2418,7 @@ const OL=(()=>{
     if(!G)return;
     const ev=dispatch(G,action);
     if(ev===null)return;
-    if(G.phase==='nope')G.nopeUntil=Date.now()+4000;else delete G.nopeUntil;
+    if(G.phase==='nope')G.nopeUntil=Date.now()+NOPE_MS;else delete G.nopeUntil;
     pushSync(ev);
     processEvents(ev);
     onlinePhaseUI();
@@ -2172,21 +2429,26 @@ const OL=(()=>{
     if(!G||G.phase!=='nope')return;
     const last=G.pending.nopes.length?G.pending.nopes[G.pending.nopes.length-1]:G.pending.actor;
     const anyNoper=G.players.some(p=>p.alive&&p.id!==last&&p.hand.includes('NOPE'));
-    hostTimer=setTimeout(()=>hostApply({a:'closeNope'}),anyNoper?4000:900);
+    hostTimer=setTimeout(()=>hostApply({a:'closeNope'}),anyNoper?NOPE_MS:900);
   }
 
   /* ---------- per-client phase UI ---------- */
+  /* Show whatever this device is being asked for right now: nope window,
+     defuse choice, where to hide the kitten, which card to give away. */
   function onlinePhaseUI(){
     const key=G?`${G.phase}|${G.seq<0?0:''}${G.phase==='nope'?G.pending.nopes.length:''}`:'';
     if(key!==uiPhaseKey){closePhaseModal();uiPhaseKey=key;}
-    if(!G||G.phase==='over')return;
+    if(!G||G.phase==='over'){stopNopeClock();return;}
+    if(G.phase!=='nope')stopNopeClock();
     if(G.phase==='nope'){
       const last=G.pending.nopes.length?G.pending.nopes[G.pending.nopes.length-1]:G.pending.actor;
       if(myPid!==last&&G.players[myPid].alive&&G.players[myPid].hand.includes('NOPE')){
         modal(`<h2>Quick — Nope it?</h2><p class="mtext">${G.players[last].name} played ${G.pending.nopes.length?'a Nope':CARDS[G.pending.cards[0]].name}${G.pending.target===myPid?' <b>on YOU</b>':''}.</p>
+          ${npClockHTML}
           <div class="mrow"><button class="btn big boom" id="mNope">NOPE! ✋</button><button class="btn" id="mLet">Let it happen</button></div>`);
-        $('#mNope').onclick=()=>{closeModal();send({a:'nope',pid:myPid});};
-        $('#mLet').onclick=closeModal;
+        startNopeClock(NOPE_MS);
+        $('#mNope').onclick=()=>{stopNopeClock();closeModal();send({a:'nope',pid:myPid});};
+        $('#mLet').onclick=()=>{stopNopeClock();closeModal();};
       }
       return;
     }
@@ -2257,6 +2519,8 @@ const OL=(()=>{
   }
   function chat(text){pushChat({n:myName(),m:String(text).slice(0,140),p:myPid});}
   function react(emo){pushChat({n:myName(),r:String(emo).slice(0,4),p:myPid});}
+  /* Render chat/reactions we haven't shown yet. On first load we mark existing
+     messages as seen so a joiner doesn't get the whole backlog replayed. */
   function drainChat(){
     const c=tree&&tree.chat;
     if(!c){chatPrimed=true;return;}   // nothing yet: we're primed for whatever comes next
@@ -2274,10 +2538,12 @@ const OL=(()=>{
   }
 
   /* ---------- public ---------- */
+  /* Submit a move: the host applies it directly, a guest posts it to /inbox. */
   function send(action){
     if(isHost)hostApply(action);
     else req('PUT','/inbox/'+Date.now()+'_'+rnd(4),{pid:myPid,action}).catch(()=>logMsg('⚠️ Couldn\'t reach the room — check your internet.'));
   }
+  /* Tear down: stop listening, delete the room if we're the host, forget it. */
   function leave(){
     stopListen();
     if(isHost&&db&&code)req('DELETE','').catch(()=>{});
@@ -2286,13 +2552,54 @@ const OL=(()=>{
     started=false;tree=null;G=null;MODE=null;chatPrimed=false;
     showChatUI(false);$('#chatLog').innerHTML='';
   }
+  /* Host only: deal a fresh round to the same players. */
   function restart(){
     if(!isHost){logMsg('Waiting for the host to start a new round…');return;}
     const defs=G.players.map(p=>({name:p.name}));
     G=newGame(defs);selected=[];
-    pushSync([{t:'log',msg:'New round! Cards dealt. 🐱'}]);
+    pushSync([{t:'newround'},
+              {t:'log',msg:'New round! Cards dealt. 🐱'},
+              {t:'log',msg:"Today's cats: "+G.cats.map(c=>CARDS[c].name).join(', ')}]);
     renderAll();hostPhaseDuties();
   }
-  return {send,leave,restart,chat,react,saveSession,clearSession,rejoin};
+  /* Someone opened an invite link (…?room=ABCD). This runs at the very end of
+     the file — the click handlers above must already be wired, which is exactly
+     why the earlier attempt from the UI layer silently did nothing. */
+  function openInvite(){
+    const wanted=(new URLSearchParams(location.search).get('room')||'').toUpperCase().slice(0,4);
+    if(!wanted)return;
+    $('#btnOnline').click();
+    $('#inpRoom').value=wanted;
+    const saved=(store.get('kk_name')||'').trim();
+    if(saved){
+      $('#inpNameOn').value=saved;
+      setTimeout(()=>{clearErr();$('#btnJoinRoom').click();},250);   // straight into the lobby
+    }else{
+      $('#inpNameOn').focus();
+      err('Pop your name in and hit Join to enter room '+wanted+'.');
+      $('#onlineErr').style.borderColor='var(--sky)';
+      $('#onlineErr').style.color='var(--ink-soft)';
+    }
+  }
+
+  /* Quit deliberately: tell the table so the game can carry on without us. */
+  function quit(){
+    if(!started){                                  // still in the lobby: just free the seat
+      if(!isHost&&myPid!=null)req('DELETE','/players/'+myPid).catch(()=>{});
+      leave();show('scr-title');return;
+    }
+    if(isHost){
+      pushChat({n:myName(),m:'(the host left — this room is closing)',p:myPid});
+      setTimeout(()=>{leave();show('scr-title');},350);
+      return;
+    }
+    send({a:'leave',pid:myPid});                    // host removes us and play continues
+    setTimeout(()=>{leave();show('scr-title');},450);
+  }
+
+  return {send,leave,restart,chat,react,saveSession,clearSession,rejoin,quit,openInvite};
 })();
+
+/* Kick off an invite link once every handler above is in place. */
+OL.openInvite();
 </script></body></html>
