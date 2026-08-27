@@ -235,6 +235,44 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   .pile{width:96px; height:136px}
   #tableMid{min-height:150px}
 }
+/* ---------- deck strip (hide the kitten) ---------- */
+.deckStrip{display:flex; align-items:center; overflow-x:auto; padding:14px 6px 10px; gap:0; background:var(--paper-dim); border:3px solid var(--ink); border-radius:14px; margin:10px 0}
+.deckStrip .dcard{width:26px; height:40px; flex:0 0 auto; border:2px solid var(--ink); border-radius:4px;
+  background:repeating-linear-gradient(45deg,#33261f 0 5px,#2a211c 5px 10px)}
+.deckStrip .slot{flex:0 0 auto; width:9px; height:52px; padding:0; background:transparent; cursor:pointer;
+  border:none; border-left:3px dashed var(--ink-soft); opacity:.45; transition:all .12s; border-radius:4px}
+.deckStrip .slot:hover,.deckStrip .slot:focus-visible{width:28px; opacity:1; background:var(--sun); border-left:3px solid var(--ink); outline:none}
+.deckStrip .stripEnd{flex:0 0 auto; font-family:var(--display); font-size:12px; letter-spacing:.08em; color:var(--ink-soft); padding:0 8px}
+#slotLabel{min-height:24px; font-size:16px; color:var(--boom-dk)}
+
+/* ---------- chat & reactions ---------- */
+#reactBar{display:none; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:2px}
+#reactBar button{font-size:20px; line-height:1; background:var(--paper); border:2.5px solid var(--ink);
+  border-radius:999px; padding:3px 9px; cursor:pointer; box-shadow:0 3px 0 rgba(20,12,8,.3); transition:transform .1s}
+#reactBar button:hover{transform:translateY(-3px) scale(1.08)}
+#reactBar button:active{transform:translateY(1px)}
+.reactFloat{position:fixed; z-index:93; pointer-events:none; font-size:34px; text-align:center; filter:drop-shadow(0 3px 0 rgba(0,0,0,.3))}
+.reactFloat span{display:block; font-family:var(--hand); font-size:13px; color:var(--paper); text-shadow:0 2px 0 rgba(0,0,0,.5)}
+#chatPanel{position:fixed; right:10px; bottom:10px; width:min(320px,92vw); max-height:60dvh; z-index:70;
+  background:var(--paper); border:3px solid var(--ink); border-radius:16px 18px 14px 17px; box-shadow:0 6px 0 rgba(0,0,0,.35);
+  display:none; flex-direction:column; overflow:hidden}
+#chatPanel.on{display:flex}
+#chatHead{display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--ink); color:var(--paper);
+  font-family:var(--display); letter-spacing:.06em}
+#chatHead button{background:none; border:none; color:var(--paper); font-size:18px; cursor:pointer; font-family:var(--display)}
+#chatLog{flex:1; overflow-y:auto; padding:8px 10px; display:flex; flex-direction:column; gap:6px; min-height:120px}
+#chatLog .msg{font-size:15.5px; line-height:1.25; word-break:break-word}
+#chatLog .msg b{font-family:var(--display); letter-spacing:.03em; font-weight:400; color:var(--boom-dk)}
+#chatLog .msg.mine b{color:var(--sky)}
+#chatLog .sys{font-size:14px; color:var(--ink-soft); font-style:italic}
+#chatInputRow{display:flex; gap:6px; padding:8px; border-top:2px dashed var(--ink-soft)}
+#chatInputRow input{flex:1; font-family:var(--hand); font-size:16px; border:2.5px solid var(--ink); border-radius:10px; padding:6px 9px; min-width:0}
+#btnChat{position:relative}
+#btnChat .dot{position:absolute; top:-5px; right:-5px; background:var(--boom); color:#fff; border:2px solid var(--ink);
+  border-radius:999px; font-family:var(--hand); font-size:11px; padding:0 5px; line-height:1.4}
+.btn.nudge{animation:nudgeGlow 1.15s ease-in-out infinite}
+@keyframes nudgeGlow{0%,100%{box-shadow:var(--shadow),0 0 0 0 rgba(255,197,61,.9)}
+  50%{box-shadow:var(--shadow),0 0 0 7px rgba(255,197,61,.45)}}
 #pawmark{position:fixed; right:10px; bottom:6px; z-index:55; font-size:12.5px; color:var(--paper); opacity:.6; font-family:var(--hand); pointer-events:none; text-shadow:0 1px 0 rgba(0,0,0,.45)}
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -326,6 +364,8 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
       <div class="rule"><div class="mini" id="rc-pair"></div><div><b>Two matching cats</b><p>Steal a random card from any player.</p></div></div>
       <div class="rule"><div class="mini" id="rc-trip"></div><div><b>Three matching cats</b><p>Name a card type — if that player has one, they must hand it over.</p></div></div>
       <div class="rule"><div class="mini" id="rc-five"></div><div><b>Five different cats</b><p>Take any card you want from the discard pile.</p></div></div>
+      <h3>The cat families</h3>
+      <div id="catZoo" style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"></div>
       <hr class="scribble">
       <p><b class="disp">Setup:</b> everyone starts with 7 cards + 1 Defuse. The deck holds one fewer Kaboom Kitten than there are players — so someone <i>will</i> find one eventually.</p>
       <p><b class="disp">Noping a Nope</b> turns it into a "Yup" — the original card happens after all. Nopes can stack forever.</p>
@@ -353,9 +393,11 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     <div id="handWrap">
       <div id="handInfo"></div>
       <div id="hand"></div>
+      <div id="reactBar"></div>
       <div id="handBtns">
         <button class="btn sun" id="btnPlaySel" style="display:none">Play</button>
         <button class="btn boom" id="btnDraw" style="display:none">Draw &amp; end turn</button>
+        <button class="btn small ghost" id="btnChat" style="display:none">💬</button>
         <button class="btn small ghost" id="btnQuit">Quit</button>
         <button class="btn small ghost" id="btnMute">🔊</button>
       </div>
@@ -370,8 +412,16 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     <button class="btn big sun" id="curtainBtn">I'm ready!</button>
   </div>
 
+  <div id="chatPanel">
+    <div id="chatHead"><span>Table talk 🐱</span><button id="chatClose">✕</button></div>
+    <div id="chatLog"></div>
+    <div id="chatInputRow">
+      <input type="text" id="chatInput" maxlength="140" placeholder="Say something…">
+      <button class="btn small sun" id="chatSend">Send</button>
+    </div>
+  </div>
   <div id="modalBg"><div id="modal"></div></div>
-  <div id="pawmark">© 2026 Zoha 🐾 · build 4</div>
+  <div id="pawmark">© 2026 Zoha 🐾 · build 6</div>
   <div id="fx"></div>
 </div>
 <script>
@@ -501,6 +551,46 @@ const ART={
     <path d="M14 46 A38 38 0 0 1 86 46" stroke="#58b368" stroke-width="7" fill="none"/>
     <circle cx="36" cy="32" r="2.5" fill="#2a211c"/><circle cx="52" cy="24" r="2.5" fill="#2a211c"/><circle cx="66" cy="33" r="2.5" fill="#2a211c"/>
     ${catHead(50,68,22,'#8fd19b','happy')}`),
+  CAT_JALEBI: ()=>svgWrap(`
+    <g stroke="#e8760c" stroke-width="7" fill="none">
+      <circle cx="36" cy="62" r="12"/><circle cx="64" cy="62" r="12"/>
+      <circle cx="50" cy="50" r="12"/><circle cx="50" cy="74" r="11"/>
+    </g>
+    <g stroke="#ffb038" stroke-width="2.5" fill="none">
+      <circle cx="36" cy="62" r="12"/><circle cx="64" cy="62" r="12"/><circle cx="50" cy="50" r="12"/>
+    </g>
+    <path d="M22 40 l4 0 m-2 -2 l0 4 M78 44 l5 0 m-2.5 -2.5 l0 5 M70 84 l4 0 m-2 -2 l0 4" stroke="#fff6e8" stroke-width="2.5"/>
+    ${catHead(50,26,15,'#f7c873','happy')}`),
+  CAT_LUNGI: ()=>svgWrap(`
+    <path d="M28 58 L72 58 L80 96 L20 96 Z" fill="#3fb0d8" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M38 58 L34 96 M50 58 L50 96 M62 58 L66 96" stroke="#2a7f9e" stroke-width="2.5"/>
+    <path d="M24 72 L76 72 M22 84 L78 84" stroke="#2a7f9e" stroke-width="2.5"/>
+    <path d="M26 58 L74 58" stroke="#2a211c" stroke-width="6"/>
+    <path d="M60 56 q10 -6 12 4 q-8 2 -12 -4" fill="#fff6e8" stroke="#2a211c" stroke-width="2.5"/>
+    ${catHead(50,34,20,'#c9a06c','smug')}`),
+  CAT_CHAI: ()=>svgWrap(`
+    <path d="M30 52 L36 90 Q50 96 64 90 L70 52 Z" fill="#d9a066" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M30 52 L70 52" stroke="#fff6e8" stroke-width="5"/>
+    <path d="M38 34 q-8 -8 0 -16 q8 -8 0 -14 M50 32 q-8 -8 0 -16 q8 -8 0 -14 M62 34 q-8 -8 0 -16 q8 -8 0 -14"
+      stroke="#fff6e8" stroke-width="3" opacity=".85"/>
+    ${catHead(50,66,17,'#f0c8a0','zen')}`),
+  CAT_RICKSHAW: ()=>svgWrap(`
+    <circle cx="30" cy="76" r="17" fill="none" stroke="#2a211c" stroke-width="4"/>
+    <circle cx="30" cy="76" r="3" fill="#2a211c"/>
+    <path d="M30 60 L30 92 M14 76 L46 76 M19 65 L41 87 M41 65 L19 87" stroke="#8a97a8" stroke-width="2"/>
+    <path d="M48 84 L84 84 L84 62 Q66 52 48 62 Z" fill="#ff5233" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M48 62 Q66 52 84 62" stroke="#fff6e8" stroke-width="3"/>
+    <circle cx="72" cy="88" r="9" fill="none" stroke="#2a211c" stroke-width="3.5"/>
+    ${catHead(42,42,16,'#c9a06c','happy')}`),
+  CAT_UNCLE: ()=>svgWrap(`
+    <path d="M18 88 L18 58 Q50 40 82 58 L82 88 Z" fill="#ffc53d" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M18 58 Q50 40 82 58 L82 68 Q50 52 18 68 Z" fill="#2a211c"/>
+    <circle cx="30" cy="90" r="7" fill="none" stroke="#2a211c" stroke-width="3.5"/>
+    <circle cx="70" cy="90" r="7" fill="none" stroke="#2a211c" stroke-width="3.5"/>
+    <path d="M40 76 L60 76" stroke="#2a211c" stroke-width="4"/>
+    ${catHead(50,60,17,'#c9a06c','smug',`
+      <path d="M50 70 Q42 66 37 70 Q35 66 40 64 Q46 63 50 68 Q54 63 60 64 Q65 66 63 70 Q58 66 50 70" fill="#2a211c"/>`)}
+    <path d="M34 46 L66 46 L62 38 L38 38 Z" fill="#ff5233" stroke="#2a211c" stroke-width="3"/>`),
   CAT_TACHE: ()=>svgWrap(`
     ${catHead(50,48,28,'#c9a06c','smug',`
       <path d="M50 66 Q38 60 30 66 Q26 60 34 57 Q44 55 50 62 Q56 55 66 57 Q74 60 70 66 Q62 60 50 66" fill="#2a211c"/>
@@ -533,18 +623,24 @@ const CARDS={
   CAT_PICKLE:{name:'Pickle Cat', cat:1, color:'#b06a10', tint:'#fdeed2', desc:'In a bit of a pickle. Play matching cats as combos!'},
   CAT_MELON: {name:'Melon Cat',  cat:1, color:'#b06a10', tint:'#fdeed2', desc:'One in a melon. Play matching cats as combos!'},
   CAT_TACHE: {name:'Mustache Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'A cat of distinction. Play matching cats as combos!'},
+  CAT_JALEBI:{name:'Jalebi Cat', cat:1, color:'#b06a10', tint:'#fdeed2', desc:'Sweet, sticky and going in circles. Play matching cats as combos!'},
+  CAT_LUNGI: {name:'Lungi Cat',  cat:1, color:'#b06a10', tint:'#fdeed2', desc:'Comfort over everything. Play matching cats as combos!'},
+  CAT_CHAI:  {name:'Chai Cat',   cat:1, color:'#b06a10', tint:'#fdeed2', desc:'One cutting, extra kadak. Play matching cats as combos!'},
+  CAT_RICKSHAW:{name:'Rickshaw Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'Tring tring! Play matching cats as combos!'},
+  CAT_UNCLE: {name:'Auto-Uncle Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'Meter down? Nahi jaayenge. Play matching cats as combos!'},
 };
 const CAT_TYPES=Object.keys(CARDS).filter(k=>CARDS[k].cat);
 /* ================= GAME ENGINE (pure rules; mutate state + emit events) ================= */
 function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-const NOPEABLE=['ATTACK','SKIP','FAVOR','SHUFFLE','FUTURE','PAIR','TRIPLE','FIVE'];
 
 function newGame(playerDefs){
   const N=playerDefs.length;
   let pool=[];
   ['ATTACK','SKIP','FAVOR','SHUFFLE'].forEach(t=>{for(let i=0;i<4;i++)pool.push(t);});
-  ['FUTURE','NOPE'].forEach(t=>{for(let i=0;i<5;i++)pool.push(t);});
-  CAT_TYPES.forEach(t=>{for(let i=0;i<4;i++)pool.push(t);});
+  for(let i=0;i<5;i++)pool.push('FUTURE');
+  for(let i=0;i<6;i++)pool.push('NOPE');
+  const cats=shuffleArr([...CAT_TYPES]).slice(0,5);   // 5 families per game, drawn from the whole zoo
+  cats.forEach(t=>{for(let i=0;i<4;i++)pool.push(t);});
   shuffleArr(pool);
   const players=playerDefs.map((p,i)=>({id:i,name:p.name,bot:!!p.bot,alive:true,hand:['DEFUSE']}));
   players.forEach(p=>{for(let i=0;i<7;i++)p.hand.push(pool.pop());});
@@ -552,7 +648,7 @@ function newGame(playerDefs){
   for(let i=0;i<extraDefuse;i++)pool.push('DEFUSE');
   for(let i=0;i<N-1;i++)pool.push('BOOM');
   shuffleArr(pool);
-  return {players,deck:pool,discard:[],turn:0,turnsLeft:1,phase:'turn',pending:null,pendingBoom:null,pendingFavor:null,winner:null,seq:0,ev:[]};
+  return {players,cats,deck:pool,discard:[],turn:0,turnsLeft:1,phase:'turn',pending:null,pendingBoom:null,pendingFavor:null,winner:null,seq:0,ev:[]};
 }
 const alivePlayers=G=>G.players.filter(p=>p.alive);
 const curP=G=>G.players[G.turn];
@@ -569,6 +665,7 @@ function advance(G,forcedTurns){
   G.turnsLeft=forcedTurns||1;
   G.phase='turn';
   emit(G,{t:'turn',pid:G.turn,turnsLeft:G.turnsLeft});
+  if(!forcedTurns)log(G,`👉 ${G.players[G.turn].name}'s turn.`);
 }
 function endOneTurn(G){ // after a draw / skip / defuse-insert
   G.turnsLeft--;
@@ -581,9 +678,8 @@ function checkWin(G){
   return false;
 }
 function removeFromHand(p,types){ // remove one instance of each listed type; return false if missing
-  const idxs=[];
   const copy=[...p.hand];
-  for(const t of types){const i=copy.indexOf(t); if(i<0)return false; copy[i]=null; idxs.push(i);}
+  for(const t of types){const i=copy.indexOf(t); if(i<0)return false; copy[i]=null;}
   p.hand=copy.filter(c=>c!==null);
   return true;
 }
@@ -665,7 +761,7 @@ function dispatch(G,a){
         case 'FAVOR':{
           const T=G.players[pd.target];
           if(!T.alive||T.hand.length===0){G.phase='turn'; log(G,`${T.name} has nothing to give!`);}
-          else{G.phase='favorGive'; G.pendingFavor={from:pd.target,to:pd.actor}; emit(G,{t:'favorAsk',from:pd.target,to:pd.actor});}
+          else{G.phase='favorGive'; G.pendingFavor={from:pd.target,to:pd.actor}; emit(G,{t:'favorAsk',from:pd.target,to:pd.actor}); log(G,`${T.name} must hand ${actor.name} a card…`);}
           break;
         }
         case 'PAIR':{
@@ -676,7 +772,7 @@ function dispatch(G,a){
             const c=T.hand.splice(i,1)[0];
             actor.hand.push(c);
             emit(G,{t:'steal',from:pd.target,to:pd.actor,card:c});
-            log(G,`${actor.name} steals a random card from ${T.name}!`);
+            log(G,`🐾 ${actor.name} swipes a random card from ${T.name}!`);
           }else log(G,`${T.name} had nothing to steal!`);
           break;
         }
@@ -714,6 +810,7 @@ function dispatch(G,a){
       }else{
         P.hand.push(c);
         emit(G,{t:'draw',pid:a.pid,card:c});
+        log(G,`${P.name} draws a card from the deck. (${G.deck.length} left)`);
         endOneTurn(G);
       }
       break;
@@ -764,7 +861,7 @@ function dispatch(G,a){
 }
 /* ================= UI + LOCAL MODES (bots / pass-and-play) ================= */
 const $=q=>document.querySelector(q), $$=q=>[...document.querySelectorAll(q)];
-let MODE=null, G=null, VIEW=0, HIDE_HAND=false, selected=[], SND=true, BOT_PEEK={}, NOPE_TIMER=null, PENDING_UI=null;
+let MODE=null, G=null, VIEW=0, HIDE_HAND=false, selected=[], SND=true, BOT_PEEK={}, NOPE_TIMER=null, NUDGE=false;
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 SND = store.get('kk_snd')!=='0';
 
@@ -786,6 +883,52 @@ const sUhoh=()=>{tone(392,.14,'triangle',.18);tone(311,.24,'triangle',.18,.16);}
 const sBoom=()=>{if(!SND)return;const c=ac();if(!c)return;const t=c.currentTime,b=c.createBuffer(1,c.sampleRate*.6,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);const s=c.createBufferSource(),g=c.createGain();s.buffer=b;g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.6);s.connect(g);g.connect(c.destination);s.start(t);tone(70,.5,'sine',.3,0,-40);};
 const sWin=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,.18,'triangle',.16,i*.13));};
 const sDefuse=()=>{tone(700,.06,'square',.14);tone(1000,.09,'square',.14,.07);};
+/* noise burst with a filter — crunches, sizzles, whooshes, growls */
+function noise(dur,vol,type,freq,when=0,q=1){
+  if(!SND)return; const c=ac(); if(!c)return;
+  const t=c.currentTime+when, n=Math.max(1,Math.floor(c.sampleRate*dur));
+  const buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,1.4);
+  const src=c.createBufferSource(); src.buffer=buf;
+  const f=c.createBiquadFilter(); f.type=type; f.frequency.value=freq; f.Q.value=q;
+  const g=c.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  src.connect(f); f.connect(g); g.connect(c.destination); src.start(t); src.stop(t+dur);
+}
+const melody=(notes,step=.11,type='triangle',vol=.15,dur=.13)=>notes.forEach((f,i)=>{if(f)tone(f,dur,type,vol,i*step);});
+const N={C:523,D:587,E:659,F:698,G:784,A:880,B:988,C2:1047,G_:392,E_:330,A_:440};
+
+/* every card gets its own silly voice */
+const CARD_SOUND={
+  ATTACK: ()=>{tone(90,.16,'sawtooth',.3,0,-40); noise(.14,.34,'lowpass',900,.02); tone(660,.08,'square',.16,.13);},
+  SKIP:   ()=>{noise(.3,.18,'highpass',1400,0); tone(1200,.22,'sine',.12,0,-800);},
+  FAVOR:  ()=>{tone(430,.3,'sine',.16,0,260); tone(560,.22,'sine',.12,.16,180);},
+  SHUFFLE:()=>{for(let i=0;i<11;i++)noise(.035,.16,'bandpass',1500+i*130,i*.032,3);},
+  FUTURE: ()=>{melody([N.C,N.E,N.G,N.C2,N.B],.075,'sine',.13,.16); tone(1760,.5,'sine',.05,.2);},
+  NOPE:   ()=>{tone(300,.1,'sawtooth',.18);tone(180,.18,'sawtooth',.18,.09);},
+  DEFUSE: ()=>{tone(760,.05,'square',.15);tone(1080,.07,'square',.15,.06);noise(.12,.1,'highpass',3000,.02);},
+  /* --- the cats --- */
+  CAT_SAMOSA: ()=>{noise(.09,.4,'bandpass',2600,0,1.6);noise(.07,.3,'bandpass',3400,.09,1.6);noise(.06,.22,'bandpass',2100,.16,1.6);},
+  CAT_DISCO:  ()=>{melody([N.A_,N.C,N.E,N.A],.085,'sawtooth',.11,.1);
+                   [0,.085,.17,.255].forEach(t=>noise(.03,.13,'highpass',7000,t));
+                   tone(110,.1,'sine',.24,0);tone(110,.1,'sine',.24,.17);},
+  CAT_PICKLE: ()=>{tone(180,.16,'sine',.2,0,520);tone(700,.14,'sine',.16,.14,-480);noise(.06,.12,'bandpass',900,.26,2);},
+  CAT_MELON:  ()=>{melody([N.G,N.G,N.A,N.G,N.C2,N.B],.115,'triangle',.15,.14);},   /* nursery-rhyme sing-song */
+  CAT_TACHE:  ()=>{tone(70,.34,'sawtooth',.26,0,26); noise(.3,.16,'lowpass',420,0,.7);   /* grrrr */
+                   tone(520,.14,'sine',.13,.3,420);},                                    /* …and a twirl */
+  CAT_JALEBI: ()=>{noise(.26,.2,'highpass',5200,0);                                      /* sizzle */
+                   melody([N.E,N.G,N.C2,N.E*2],.07,'sine',.12,.12);},
+  CAT_LUNGI:  ()=>{noise(.22,.2,'bandpass',700,0,.8);                                    /* fabric flap */
+                   tone(120,.13,'sine',.28,.06);tone(95,.16,'sine',.26,.2);tone(150,.1,'sine',.2,.34);}, /* dhol */
+  CAT_CHAI:  ()=>{noise(.34,.17,'bandpass',1100,0,.9);          /* pour */
+                  tone(1500,.05,'sine',.1,.3);tone(2100,.06,'sine',.09,.36);   /* spoon clink */
+                  noise(.16,.13,'lowpass',600,.44);},                           /* slurp */
+  CAT_RICKSHAW:()=>{[0,.16].forEach(t=>{tone(1980,.13,'sine',.13,t);tone(2640,.11,'sine',.1,t+.02);}); /* tring tring */
+                    noise(.2,.09,'bandpass',2800,.3,4);},                        /* wheel squeak */
+  CAT_UNCLE: ()=>{tone(392,.15,'square',.2,0);tone(330,.19,'square',.2,.15);     /* pom-pom horn */
+                  for(let i=0;i<6;i++)noise(.05,.13,'lowpass',260,.34+i*.055);}, /* engine putter */
+};
+const sSteal=()=>{tone(880,.07,'triangle',.13,0,-260);tone(1180,.06,'triangle',.11,.07);noise(.08,.1,'highpass',4000,.02);};
+function playCardSound(t){const f=CARD_SOUND[t];if(f)f();else sPop();}
 
 /* ---------- screens ---------- */
 function show(id){$$('.screen').forEach(s=>s.classList.remove('on'));$('#'+id).classList.add('on');}
@@ -793,7 +936,8 @@ $('#heroArt').innerHTML=HERO_ART();
 $('#curtainArt').innerHTML=svgWrap(catHead(50,54,30,'#ffc53d','happy'));
 $$('.backBtn').forEach(b=>b.onclick=()=>{show('scr-title')});
 $('#btnHelp').onclick=()=>{renderHelp();show('scr-help')};
-$('#btnMute').onclick=()=>{SND=!SND;store.set('kk_snd',SND?'1':'0');$('#btnMute').textContent=SND?'🔊':'🔇';};
+$('#btnMute').onclick=()=>{SND=!SND;store.set('kk_snd',SND?'1':'0');$('#btnMute').textContent=SND?'🔊':'🔇';
+};
 $('#btnMute').textContent=SND?'🔊':'🔇';
 
 function renderHelp(){
@@ -802,6 +946,9 @@ function renderHelp(){
     el.insertAdjacentHTML('beforeend',`<div class="rule"><div class="mini">${ART[t]()}</div><div><b style="color:${CARDS[t].color}">${CARDS[t].name}</b><p>${CARDS[t].desc}</p></div></div>`);
   });
   $('#rc-pair').innerHTML=ART.CAT_SAMOSA(); $('#rc-trip').innerHTML=ART.CAT_DISCO(); $('#rc-five').innerHTML=ART.CAT_MELON();
+  const zoo=$('#catZoo');
+  if(zoo)zoo.innerHTML=CAT_TYPES.map(t=>`<div style="text-align:center"><div style="width:74px">${ART[t]()}</div>
+    <div style="font-family:var(--display);font-size:13px;letter-spacing:.03em">${CARDS[t].name}</div></div>`).join('');
 }
 
 /* ---------- setup screens ---------- */
@@ -843,15 +990,19 @@ $('#btnStartLocal').onclick=()=>{
 };
 function startLocalGame(defs){
   G=newGame(defs); BOT_PEEK={}; selected=[]; HIDE_HAND=false;
+  showChatUI(false);
   show('scr-table');
   logMsg('Cards dealt. Good luck! 🐱');
+  setTimeout(()=>logMsg('Today\'s cats: '+G.cats.map(c=>CARDS[c].name).join(', ')),2200);
   renderAll();
   if(MODE==='hot')curtainFor(G.turn,()=>{VIEW=G.turn;renderAll();});
   afterChange();
 }
 
 /* ---------- generic modal ---------- */
-function modal(html){$('#modal').innerHTML=html;$('#modalBg').classList.add('on');}
+function modal(html,kind){$('#modal').innerHTML=html;$('#modalBg').dataset.kind=kind||'phase';$('#modalBg').classList.add('on');}
+/* only auto-dismiss prompts the game itself opened — never an info popup the player is still reading */
+function closePhaseModal(){if($('#modalBg').dataset.kind!=='info')closeModal();}
 function closeModal(){$('#modalBg').classList.remove('on');}
 function curtainFor(pid,cb){
   HIDE_HAND=true;renderHand();
@@ -932,6 +1083,8 @@ function updateHandButtons(){
   const play=$('#btnPlaySel'), draw=$('#btnDraw');
   const mine=isMyTurn()&&G.phase==='turn';
   draw.style.display=mine?'':'none';
+  draw.classList.toggle('nudge',mine&&NUDGE);
+  draw.textContent=mine&&NUDGE?'Draw to end your turn 👇':'Draw & end turn';
   draw.onclick=()=>act({a:'draw',pid:VIEW});
   const types=selected.map(i=>myHand()[i]);
   const cls=types.length?classifyPlay(types):null;
@@ -950,10 +1103,11 @@ function renderBanner(msg){
   if(G.phase==='nope'){b.innerHTML=`⏳ Waiting for Nopes…`;return;}
   if(G.phase==='favorGive'){b.innerHTML=`${G.players[G.pendingFavor.from].name} is choosing a card to give…`;return;}
   if(G.phase==='defuse'||G.phase==='insert'){b.innerHTML=`💣 <span class="disp">${G.players[G.pendingBoom.pid].name}</span> drew a Kaboom Kitten!`;return;}
-  if(isMyTurn())b.innerHTML=`<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span> Play cards or draw to end your turn.`;
+  if(isMyTurn())b.innerHTML=NUDGE
+    ? `<span class="disp" style="color:var(--sun)">Now draw a card</span> to finish your turn 👇`
+    : `<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span> Play cards or draw to end your turn.`;
   else b.innerHTML=`<span class="disp">${cp.name}</span> is ${cp.bot?'plotting…':'playing…'}`;
 }
-let logT=null;
 function logMsg(m){
   const bar=$('#logbar');
   const old=bar.querySelector('.entry');
@@ -975,13 +1129,19 @@ function flyCard(html,from,to,dur=500){
 }
 function fxPlay(pid,type){
   const from=pid===VIEW?rectOf($('#hand'))||rectOf($('#discardPile')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#deckPile')));
-  flyCard(cardHTML(type),from,rectOf($('#discardPile')));sPop();
+  flyCard(cardHTML(type),from,rectOf($('#discardPile')));playCardSound(type);
 }
 function fxDraw(pid){
   const to=pid===VIEW?rectOf($('#hand')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#hand')));
   flyCard(cardBackHTML(),rectOf($('#deckPile')),to);sSwish();
 }
 function fxNope(){const s=document.createElement('div');s.className='nopeStamp';s.textContent='NOPE!';document.body.appendChild(s);setTimeout(()=>s.remove(),850);sNope();}
+let flashT=null;
+function flash(msg){
+  const el=$('#handInfo'); if(!el)return;
+  el.textContent=msg; el.style.color='var(--sun)';
+  clearTimeout(flashT); flashT=setTimeout(()=>{el.style.color='';renderHand();},3200);
+}
 function fxBoom(){
   const f=document.createElement('div');f.className='boomFlash';document.body.appendChild(f);setTimeout(()=>f.remove(),950);
   document.body.classList.add('shake');setTimeout(()=>document.body.classList.remove('shake'),550);sBoom();
@@ -1030,18 +1190,31 @@ function processEvents(evs){
   evs.forEach(e=>{
     switch(e.t){
       case 'log':logMsg(e.msg);break;
-      case 'play':fxPlay(e.pid,e.cards[0]);break;
+      case 'play':fxPlay(e.pid,e.cards[0]);if(e.pid===VIEW)NUDGE=true;break;
+      case 'favorAsk':break;
       case 'nope':fxNope();break;
       case 'fizzle':break;
-      case 'draw':fxDraw(e.pid);break;
+      case 'draw':fxDraw(e.pid);
+        if(e.pid===VIEW&&!HIDE_HAND)flash(`You drew a ${CARDS[e.card].name}.`);
+        break;
       case 'boomDrawn':sUhoh();break;
       case 'defused':sDefuse();break;
       case 'exploded':fxBoom();break;
       case 'shuffled':sSwish();break;
-      case 'steal':case 'give':sPop();break;
+      case 'steal':sSteal();
+        if(e.to===VIEW)flash(`😼 You swiped their ${CARDS[e.card].name}!`);
+        else if(e.from===VIEW)flash(`😾 They swiped your ${CARDS[e.card].name}!`);
+        break;
+      case 'give':sPop();
+        if(e.to===VIEW)flash(`🎁 You were handed a ${CARDS[e.card].name}.`);
+        else if(e.from===VIEW)flash(`You handed over your ${CARDS[e.card].name}.`);
+        break;
+      case 'dig':sPop();if(e.pid===VIEW)flash(`You fished out a ${CARDS[e.card].name}!`);break;
       case 'future':if(e.pid===VIEW&&(MODE!=='bots'||e.pid===0))showFuture(e.cards);break;
       case 'win':fxConfetti();sWin();setTimeout(()=>showWin(e.pid),900);break;
-      case 'turn':selected=[];break;
+      case 'turn':selected=[];NUDGE=false;
+        if(e.pid===VIEW&&!HIDE_HAND){tone(660,.1,'sine',.11);tone(880,.14,'sine',.11,.1);}
+        break;
     }
   });
   renderAll();
@@ -1049,7 +1222,7 @@ function processEvents(evs){
 function showFuture(cards){
   modal(`<h2>The Future…</h2><p class="mtext">Top of the deck, in draw order:</p>
     <div class="futureFan">${cards.map((c,i)=>`<div class="slot">${cardHTML(c,'mini')}<div class="lab">${['NEXT','2nd','3rd'][i]||''}</div></div>`).join('')}</div>
-    <div class="mrow"><button class="btn sun" id="mOk">Got it 🤫</button></div>`);
+    <div class="mrow"><button class="btn sun" id="mOk">Got it 🤫</button></div>`,'info');
   $('#mOk').onclick=closeModal;
 }
 function showWin(pid){
@@ -1068,6 +1241,58 @@ $('#btnQuit').onclick=()=>{
   $('#mYes').onclick=()=>{closeModal();if(MODE==='online')OL.leave();show('scr-title')};
   $('#mNo').onclick=closeModal;
 };
+
+/* ---------- chat & reactions ---------- */
+const REACTS=['😹','😱','😾','👏','🔥','💣','🙀','😼'];
+let chatUnread=0;
+function chatAvailable(){return MODE==='online';}
+function setupChatUI(){
+  const bar=$('#reactBar');
+  bar.innerHTML=REACTS.map(r=>`<button data-r="${r}">${r}</button>`).join('');
+  $$('#reactBar button').forEach(b=>b.onclick=()=>OL.react(b.dataset.r));
+  $('#btnChat').onclick=()=>{
+    const p=$('#chatPanel');p.classList.toggle('on');
+    if(p.classList.contains('on')){chatUnread=0;renderChatBadge();$('#chatInput').focus();}
+  };
+  $('#chatClose').onclick=()=>$('#chatPanel').classList.remove('on');
+  $('#chatSend').onclick=sendChat;
+  $('#chatInput').onkeydown=ev=>{if(ev.key==='Enter')sendChat();};
+}
+function sendChat(){
+  const i=$('#chatInput'), t=i.value.trim();
+  if(!t)return; i.value=''; OL.chat(t);
+}
+function renderChatBadge(){
+  const b=$('#btnChat'); if(!b)return;
+  b.innerHTML=chatUnread?`💬<span class="dot">${chatUnread}</span>`:'💬';
+}
+function showChatUI(on){
+  $('#btnChat').style.display=on?'':'none';
+  $('#reactBar').style.display=on?'flex':'none';
+  if(!on)$('#chatPanel').classList.remove('on');
+}
+function addChatLine(name,text,mine){
+  const log=$('#chatLog'); if(!log)return;
+  const d=document.createElement('div'); d.className='msg'+(mine?' mine':'');
+  const b=document.createElement('b'); b.textContent=name+': ';
+  d.appendChild(b); d.appendChild(document.createTextNode(text));
+  log.appendChild(d); log.scrollTop=log.scrollHeight;
+  while(log.children.length>80)log.removeChild(log.firstChild);
+  if(!$('#chatPanel').classList.contains('on')){chatUnread++;renderChatBadge();}
+}
+function floatReaction(name,emo){
+  const d=document.createElement('div'); d.className='reactFloat';
+  d.innerHTML=`<div>${emo}</div>`;
+  const s=document.createElement('span'); s.textContent=name; d.appendChild(s);
+  d.style.left=(12+Math.random()*70)+'vw'; d.style.bottom='22vh';
+  document.body.appendChild(d);
+  const an=d.animate([{transform:'translateY(0) scale(.5)',opacity:0},
+                      {transform:'translateY(-30px) scale(1.15)',opacity:1,offset:.22},
+                      {transform:'translateY(-150px) scale(1)',opacity:0}],
+                     {duration:2200,easing:'cubic-bezier(.2,.8,.3,1)'});
+  an.onfinish=()=>d.remove();
+  tone(660+Math.random()*400,.09,'sine',.1,0,180);
+}
 
 /* ---------- local action routing ---------- */
 function act(action){
@@ -1161,20 +1386,43 @@ function handleDefusePhase(){
   };
   if(MODE==='hot'&&VIEW!==pid){curtainFor(pid,()=>{VIEW=pid;renderAll();showIt();});}else showIt();
 }
+/* Slide the kitten anywhere in the real deck — click the gap you want. */
+function openInsertPicker(n,cb){
+  let strip='<div class="stripEnd">TOP</div>';
+  for(let i=0;i<=n;i++){
+    strip+=`<button class="slot" data-pos="${i}" aria-label="Insert at position ${i+1}"></button>`;
+    if(i<n)strip+='<div class="dcard"></div>';
+  }
+  strip+='<div class="stripEnd">BOTTOM</div>';
+  modal(`<h2>Hide the kitten 😼</h2>
+    <p class="mtext" style="margin-top:-4px">Slip it anywhere among the ${n} cards — click a gap. Nobody sees where it goes.</p>
+    <div class="deckStrip" id="deckStrip">${strip}</div>
+    <div class="mtext" id="slotLabel">Hover a gap to see where it lands…</div>
+    <div class="mrow">
+      <button class="btn small sun" data-quick="0">Right on top 😈</button>
+      <button class="btn small" data-quick="${Math.floor(n/2)}">Middle</button>
+      <button class="btn small" data-quick="${n}">Bottom</button>
+      <button class="btn small sky" data-quick="rnd">Surprise me 🎲</button>
+    </div>`);
+  const lab=$('#slotLabel');
+  const describe=p=>p===0?'Right on top — the very next card drawn. Evil. 😈'
+    :p===n?`Dead last — ${n} cards above it. They'll forget it exists.`
+    :`Position ${p+1} from the top — ${p} card${p>1?'s':''} above, ${n-p} below.`;
+  $$('#modal .slot').forEach(b=>{
+    const p=+b.dataset.pos;
+    b.onmouseenter=b.onfocus=()=>{lab.textContent=describe(p);};
+    b.onclick=()=>{closeModal();cb(p);};
+  });
+  $$('#modal [data-quick]').forEach(b=>b.onclick=()=>{
+    closeModal();const q=b.dataset.quick;
+    cb(q==='rnd'?null:+q);
+  });
+}
 function handleInsertPhase(){
   const pid=G.pendingBoom.pid, p=G.players[pid];
   const go=(pos)=>{const ev=dispatch(G,{a:'insert',pid,pos});processEvents(ev);afterChange();};
   if(MODE==='bots'&&p.bot){setTimeout(()=>go(Math.random()<.5?0:Math.floor(Math.random()*(G.deck.length+1))),900);return;}
-  const n=G.deck.length;
-  modal(`<h2>Hide the kitten</h2><p class="mtext">Secretly slide it back into the deck (${n} cards). Nobody else will know where… the purr-fect crime.</p>
-    <div class="mrow">
-      <button class="btn sun" data-p="0">On top 😈</button>
-      ${n>=1?'<button class="btn" data-p="1">2nd from top</button>':''}
-      ${n>=2?`<button class="btn" data-p="${Math.floor(n/2)}">Middle</button>`:''}
-      <button class="btn" data-p="${n}">Bottom</button>
-      <button class="btn sky" data-p="-1">Random 🎲</button>
-    </div>`);
-  $$('#modal [data-p]').forEach(b=>b.onclick=()=>{closeModal();const v=+b.dataset.p;go(v<0?null:v);});
+  openInsertPicker(G.deck.length,go);
 }
 function handleFavorPhase(){
   const {from,to}=G.pendingFavor, p=G.players[from];
@@ -1235,6 +1483,9 @@ function botMove(){
     return ev;
   };
 })();
+
+/* boot the chat / reaction controls once the DOM is in place */
+setupChatUI();
 /* ================= ONLINE MODE (Firebase RTDB over REST + EventSource, host runs the deck) ================= */
 const OL=(()=>{
   let db=null, code=null, myPid=null, isHost=false, es=null, pollIv=null, tree=null;
@@ -1258,6 +1509,8 @@ const OL=(()=>{
   }
   function myName(){const v=($('#inpNameOn').value||'').trim()||'Cat '+rnd(3).toUpperCase();store.set('kk_name',v);return v;}
 
+  const seenChat={};
+  let chatPrimed=false;
   const BAKED_DB='https://kaboom-kittens-default-rtdb.asia-southeast1.firebasedatabase.app';
 
   /* ---------- lobby ---------- */
@@ -1302,6 +1555,7 @@ const OL=(()=>{
   };
   function enterLobby(){
     started=false;lastSeq=-1;lastEvSeq=-1;evSeq=0;waitMode=false;clearAuto();
+    chatPrimed=false;Object.keys(seenChat).forEach(k=>delete seenChat[k]);$('#chatLog').innerHTML='';
     $('#onlineSetupPanel').style.display='none';
     $('#lobbyPanel').style.display='';
     $('#lobbyCode').textContent=code;
@@ -1363,11 +1617,13 @@ const OL=(()=>{
     const defs=Object.keys(tree.players).filter(k=>tree.players[k]).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
     G=newGame(defs);MODE='online';VIEW=myPid;selected=[];
     clearAuto();
-    pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'}],{status:'playing',startReq:null});
+    pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'},
+              {t:'log',msg:"Today's cats: "+G.cats.map(c=>CARDS[c].name).join(', ')}],{status:'playing',startReq:null});
     startedNow();
   }
   function startedNow(){
-    started=true;show('scr-table');renderAll();hostPhaseDuties();
+    started=true;show('scr-table');showChatUI(true);renderAll();hostPhaseDuties();
+    logMsg('Tip: tap 💬 to chat, or use the emoji row to react!');
   }
 
   /* ---------- realtime tree sync ---------- */
@@ -1411,11 +1667,13 @@ const OL=(()=>{
         lp.insertAdjacentHTML('beforeend',`<span class="chip ${+k===myPid?'sel':''}">${ps[k].name}${+k===0?' 👑':''}</span>`);
       });
       if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;clearAuto();startedNow();}return;}
+      drainChat();
       const n=playerCountIn(tree);
       if(isHost&&tree.startReq&&n>=2){clearAuto();startGameAsHost();return;}
       updateLobbyControls(n);
       return;
     }
+    drainChat();
     if(isHost){drainInbox();return;} // host is source of truth for game state
     applyRemoteGame();
   }
@@ -1469,7 +1727,7 @@ const OL=(()=>{
   /* ---------- per-client phase UI ---------- */
   function onlinePhaseUI(){
     const key=G?`${G.phase}|${G.seq<0?0:''}${G.phase==='nope'?G.pending.nopes.length:''}`:'';
-    if(key!==uiPhaseKey){closeModal();uiPhaseKey=key;}
+    if(key!==uiPhaseKey){closePhaseModal();uiPhaseKey=key;}
     if(!G||G.phase==='over')return;
     if(G.phase==='nope'){
       const last=G.pending.nopes.length?G.pending.nopes[G.pending.nopes.length-1]:G.pending.actor;
@@ -1491,13 +1749,7 @@ const OL=(()=>{
       return;
     }
     if(G.phase==='insert'&&G.pendingBoom.pid===myPid){
-      const n=G.deck.length;
-      modal(`<h2>Hide the kitten</h2><p class="mtext">Secretly slide it back into the deck (${n} cards) — the purr-fect crime.</p>
-        <div class="mrow"><button class="btn sun" data-p="0">On top 😈</button>
-        ${n>=1?'<button class="btn" data-p="1">2nd from top</button>':''}
-        ${n>=2?`<button class="btn" data-p="${Math.floor(n/2)}">Middle</button>`:''}
-        <button class="btn" data-p="${n}">Bottom</button><button class="btn sky" data-p="-1">Random 🎲</button></div>`);
-      $$('#modal [data-p]').forEach(b=>b.onclick=()=>{closeModal();const v=+b.dataset.p;send({a:'insert',pid:myPid,pos:v<0?null:v});});
+      openInsertPicker(G.deck.length,pos=>send({a:'insert',pid:myPid,pos}));
       return;
     }
     if(G.phase==='favorGive'&&G.pendingFavor&&G.pendingFavor.from===myPid){
@@ -1506,6 +1758,29 @@ const OL=(()=>{
         <div class="cardpick">${p.hand.map((c,i)=>`<div data-i="${i}">${cardHTML(c,'mini')}</div>`).join('')}</div>`);
       $$('#modal [data-i]').forEach(d=>d.onclick=()=>{closeModal();send({a:'give',pid:myPid,idx:+d.dataset.i});});
     }
+  }
+
+  /* ---------- chat & reactions ---------- */
+  function pushChat(obj){
+    if(!db||!code)return;
+    req('PUT','/chat/'+Date.now()+'_'+rnd(4),obj).catch(()=>logMsg('⚠️ Message didn\'t send.'));
+  }
+  function chat(text){pushChat({n:myName(),m:String(text).slice(0,140),p:myPid});}
+  function react(emo){pushChat({n:myName(),r:String(emo).slice(0,4),p:myPid});}
+  function drainChat(){
+    const c=tree&&tree.chat;
+    if(!c){chatPrimed=true;return;}   // nothing yet: we're primed for whatever comes next
+    const keys=Object.keys(c).sort();
+    keys.forEach(k=>{
+      if(seenChat[k])return;
+      seenChat[k]=1;
+      if(!chatPrimed)return;            // don't replay history on join
+      const m=c[k]; if(!m)return;
+      if(m.r)floatReaction(m.n||'Someone',m.r);
+      else if(m.m)addChatLine(m.n||'Someone',m.m,m.p===myPid);
+    });
+    chatPrimed=true;
+    if(isHost&&keys.length>60)keys.slice(0,keys.length-40).forEach(k=>req('DELETE','/chat/'+k).catch(()=>{}));
   }
 
   /* ---------- public ---------- */
@@ -1517,7 +1792,8 @@ const OL=(()=>{
     stopListen();
     if(isHost&&db&&code)req('DELETE','').catch(()=>{});
     if(hostTimer)clearTimeout(hostTimer);
-    started=false;tree=null;G=null;MODE=null;
+    started=false;tree=null;G=null;MODE=null;chatPrimed=false;
+    showChatUI(false);$('#chatLog').innerHTML='';
   }
   function restart(){
     if(!isHost){logMsg('Waiting for the host to start a new round…');return;}
@@ -1526,6 +1802,6 @@ const OL=(()=>{
     pushSync([{t:'log',msg:'New round! Cards dealt. 🐱'}]);
     renderAll();hostPhaseDuties();
   }
-  return {send,leave,restart};
+  return {send,leave,restart,chat,react};
 })();
 </script></body></html>
