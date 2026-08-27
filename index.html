@@ -4,10 +4,9 @@
   KABOOM KITTENS — a fan-made card game of cats, luck and betrayal.
   © 2026 Zoha. Original art, names and code.
 
-  One self-contained HTML file: 
-  (no build step, no dependencies, no external assets) 
-  Fonts come from Google Fonts with a full fallback stack; each
-  illustration is a separate SVG; each sound is synthesised at runtime.
+  One self-contained HTML file: no build step, no dependencies, no external
+  assets. Fonts come from Google Fonts with a full fallback stack; every
+  illustration is generated SVG and every sound is synthesised at runtime.
 
   HOW THIS FILE IS ORGANISED
     1. <style>   design tokens, the oval table, cards, chat, animations
@@ -17,14 +16,14 @@
     5. UI        rendering, sound, animation, bots, pass-and-play
     6. OL        online rooms synced through Firebase Realtime Database
 
-  THE IDEA 
+  THE ONE IDEA WORTH KNOWING
   The engine never touches the DOM. dispatch() mutates the game state and
   returns a list of events ({t:'draw'}, {t:'steal'}, {t:'log'}, …). The UI
-  replays those events as animations, sounds and log lines. That separation
-  lets identical rules run locally against bots and remotely over the
+  replays those events as animations, sounds and log lines. That separation is
+  what lets identical rules run locally against bots and remotely over the
   network — online play simply ships the same event list to the other devices.
   ============================================================================
-  -->
+-->
 <title>Kaboom Kittens</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bangers&family=Patrick+Hand&display=swap">
@@ -69,6 +68,7 @@ h1,h2,h3,.disp{font-family:var(--display); font-weight:400; letter-spacing:.04em
 .btn.boom{background:var(--boom); color:#fff}
 .btn.sun{background:var(--sun)}
 .btn.sky{background:var(--sky); color:#fff}
+.btn.leaf{background:var(--leaf); color:#fff}
 .btn.ghost{background:transparent; color:var(--paper); border-color:var(--paper); box-shadow:0 4px 0 rgba(0,0,0,.25)}
 .btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
 .btn.small{font-size:16px; padding:6px 14px}
@@ -159,7 +159,23 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .seat .avatar{width:40px; height:40px}
 .seat .nm{font-size:14px; max-width:92px}
 .seat .cards{font-size:12.5px}
-.seat.mine{border-color:var(--sky); background:#fffaf0}
+.seat{border-color:var(--c,var(--ink))}
+.seat:not(.turn):not(.dead){opacity:.82}
+.seat.mine{background:#fffaf0}
+.seat.mine .nm{color:var(--boom-dk)}
+.turnpill{
+  position:absolute; top:-17px; left:50%; transform:translateX(-50%); white-space:nowrap;
+  font-family:var(--display); font-size:11.5px; letter-spacing:.09em; padding:1px 9px;
+  background:var(--c,var(--sun)); color:var(--ink); border:2.5px solid var(--ink); border-radius:999px;
+  box-shadow:0 2px 0 rgba(0,0,0,.35);
+}
+.turnPointer{
+  position:absolute; width:0; height:0; pointer-events:none;
+  border-left:11px solid transparent; border-right:11px solid transparent;
+  border-bottom:16px solid var(--c,var(--sun));
+  filter:drop-shadow(0 2px 0 rgba(0,0,0,.4)); animation:ptrPulse 1.5s ease-in-out infinite;
+}
+@keyframes ptrPulse{0%,100%{opacity:.75}50%{opacity:1}}
 .opp.turn::after{content:""; position:absolute; inset:-7px; border:3px dashed var(--sun); border-radius:20px; pointer-events:none; animation:spinB 6s linear infinite}
 @keyframes spinB{to{transform:rotate(0.001deg)}}
 .opp.dead{opacity:.55; filter:grayscale(.9)}
@@ -199,8 +215,18 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #logbar{width:min(680px,96vw); min-height:46px; margin-top:4px; z-index:5; overflow:hidden; position:relative; display:flex; align-items:center; justify-content:center}
 #logbar .entry{
   position:absolute; left:0; right:0; margin:auto; text-align:center; color:var(--paper); font-size:16px;
-  line-height:1.2; padding:0 8px; text-shadow:0 2px 0 rgba(0,0,0,.45); transition:all .3s; opacity:.95;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  line-height:1.25; padding:2px 10px; text-shadow:0 2px 0 rgba(0,0,0,.45); transition:all .3s; opacity:.97;
+}
+#logbar .entry .dot{
+  display:inline-block; width:11px; height:11px; border-radius:50%; margin-right:7px;
+  border:2px solid var(--ink); vertical-align:baseline;
+}
+#logbar .entry.mine{font-weight:bold}
+#logbar .entry.turnline{font-size:0}
+#logbar .entry.turnline .tl{
+  font-family:var(--display); font-size:16px; letter-spacing:.1em; color:var(--ink);
+  background:var(--c,var(--sun)); border:2.5px solid var(--ink); border-radius:999px;
+  padding:3px 18px; box-shadow:0 3px 0 rgba(0,0,0,.35); text-shadow:none; display:inline-block;
 }
 
 /* ---------- hand ---------- */
@@ -284,6 +310,9 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .futureFan .slot .lab{font-family:var(--display); font-size:14px; color:var(--ink-soft); margin-top:6px}
 
 @media (max-width:620px){
+  #reactRail{right:4px}
+  #reactToggle{width:40px; height:40px; font-size:20px}
+  #reactBar button{font-size:19px}
   #feltOval,#seats{width:94%; height:88%}
   #feltOval{border-width:7px}
   .seat .avatar{width:32px; height:32px}
@@ -308,13 +337,36 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #slotLabel{min-height:24px; font-size:16px; color:var(--boom-dk)}
 
 /* ---------- chat & reactions ---------- */
-#reactBar{display:none; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:2px}
-#reactBar button{font-size:20px; line-height:1; background:var(--paper); border:2.5px solid var(--ink);
-  border-radius:999px; padding:3px 9px; cursor:pointer; box-shadow:0 3px 0 rgba(20,12,8,.3); transition:transform .1s}
-#reactBar button:hover{transform:translateY(-3px) scale(1.08)}
-#reactBar button:active{transform:translateY(1px)}
-.reactFloat{position:fixed; z-index:93; pointer-events:none; font-size:34px; text-align:center; filter:drop-shadow(0 3px 0 rgba(0,0,0,.3))}
-.reactFloat span{display:block; font-family:var(--hand); font-size:13px; color:var(--paper); text-shadow:0 2px 0 rgba(0,0,0,.5)}
+/* Reactions live on a rail at the edge of the screen, clear of the table. */
+#reactRail{position:fixed; right:8px; top:50%; transform:translateY(-50%); z-index:58;
+  display:none; flex-direction:column; align-items:center; gap:6px}
+#reactRail.on{display:flex}
+#reactToggle{font-size:24px; line-height:1; width:48px; height:48px; border-radius:50%;
+  background:var(--paper); border:3px solid var(--ink); cursor:pointer; box-shadow:0 4px 0 rgba(20,12,8,.35);
+  transition:transform .12s}
+#reactToggle:hover{transform:scale(1.08) rotate(-6deg)}
+#reactBar{display:none; flex-direction:column; gap:5px; padding:7px 5px; background:rgba(255,246,232,.94);
+  border:3px solid var(--ink); border-radius:999px; box-shadow:0 4px 0 rgba(20,12,8,.35)}
+#reactBar.open{display:flex}
+#reactBar button{font-size:22px; line-height:1; background:transparent; border:none; cursor:pointer;
+  padding:3px 6px; border-radius:50%; transition:transform .12s}
+#reactBar button:hover{transform:scale(1.35)}
+#reactBar button:active{transform:scale(.9)}
+
+/* ghost-cat spectator strip */
+#spyBar{display:none; gap:7px; flex-wrap:wrap; justify-content:center; margin-bottom:4px}
+.spyChip{font-family:var(--display); font-size:14px; letter-spacing:.04em; padding:4px 13px; cursor:pointer;
+  background:var(--paper); color:var(--ink); border:3px solid var(--c,var(--ink)); border-radius:999px;
+  box-shadow:0 3px 0 rgba(20,12,8,.3); opacity:.7; transition:transform .12s, opacity .12s}
+.spyChip.sel{opacity:1; background:var(--c); transform:translateY(-2px)}
+.spyChip.playing::after{content:' ▶'}
+#hand .card.spy{cursor:default; opacity:.97}
+#hand .card.spy:hover{transform:translateY(-8px)}
+.reactFloat{position:fixed; z-index:93; pointer-events:none; font-size:46px; text-align:center;
+  filter:drop-shadow(0 4px 0 rgba(0,0,0,.35))}
+.reactFloat span{display:inline-block; font-family:var(--display); font-size:14px; letter-spacing:.05em;
+  color:var(--ink); background:var(--c,var(--sun)); border:2.5px solid var(--ink); border-radius:999px;
+  padding:1px 10px; margin-top:2px; text-shadow:none}
 #chatPanel{position:fixed; right:10px; bottom:10px; width:min(320px,92vw); max-height:60dvh; z-index:70;
   background:var(--paper); border:3px solid var(--ink); border-radius:16px 18px 14px 17px; box-shadow:0 6px 0 rgba(0,0,0,.35);
   display:none; flex-direction:column; overflow:hidden}
@@ -335,6 +387,14 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .btn.nudge{animation:nudgeGlow 1.15s ease-in-out infinite}
 @keyframes nudgeGlow{0%,100%{box-shadow:var(--shadow),0 0 0 0 rgba(255,197,61,.9)}
   50%{box-shadow:var(--shadow),0 0 0 7px rgba(255,197,61,.45)}}
+#codeBox{
+  display:flex; justify-content:center; align-items:center; margin:6px auto 12px;
+  background:var(--ink); border-radius:16px; padding:12px 10px; box-shadow:inset 0 3px 10px rgba(0,0,0,.5);
+}
+#codeBox span{
+  font-family:var(--display); font-size:clamp(40px,11vw,62px); letter-spacing:.28em;
+  color:var(--sun); text-indent:.28em; line-height:1.05;
+}
 #pawmark{position:fixed; right:10px; bottom:6px; z-index:55; font-size:12.5px; color:var(--paper); opacity:.6; font-family:var(--hand); pointer-events:none; text-shadow:0 1px 0 rgba(0,0,0,.45)}
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -354,6 +414,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
       <button class="btn big boom" id="btnBots">Play vs Bots</button>
       <button class="btn big sun" id="btnHotseat">Pass &amp; Play</button>
       <button class="btn big sky" id="btnOnline">Play Online</button>
+      <button class="btn big leaf" id="btnResume" style="display:none">Rejoin your game</button>
       <button class="btn ghost" id="btnHelp">How to Play</button>
     </div>
     <div class="credit">Made by Zoha 🐾 — a fan who wanted all the kaboom with none of the cards. Original art &amp; code.</div>
@@ -393,19 +454,27 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
         <button class="btn big sun" id="btnCreateRoom">Create room</button>
       </div>
       <hr class="scribble">
-      <div class="row" style="justify-content:center; align-items:center">
-        <input type="text" id="inpRoom" placeholder="ROOM CODE" maxlength="4" style="width:150px; text-transform:uppercase; font-family:var(--display); font-size:24px; text-align:center; letter-spacing:.2em">
-        <button class="btn big sky" id="btnJoinRoom">Join</button>
+      <div class="field" style="align-items:center">
+        <label style="text-align:center">Joining a friend? Enter their room code</label>
+        <div class="row" style="justify-content:center; align-items:center; margin:0">
+          <input type="text" id="inpRoom" placeholder="CODE" maxlength="4" autocomplete="off"
+            style="width:220px; text-transform:uppercase; font-family:var(--display); font-size:34px;
+                   text-align:center; letter-spacing:.32em; padding:10px 14px">
+          <button class="btn big sky" id="btnJoinRoom">Join</button>
+        </div>
       </div>
       <div class="note" id="onlineErr" style="display:none; border-color:var(--boom); color:var(--boom-dk)"></div>
     </div>
     <div class="panel" id="lobbyPanel" style="display:none">
-      <h2>Room <span id="lobbyCode" style="color:var(--sky)"></span></h2>
-      <p class="mtext" style="text-align:center">Tell your friends the code — meow’s the time! They pick <i>Play Online → Join</i>.</p>
+      <h2 style="text-align:center">Room code</h2>
+      <div id="codeBox"><span id="lobbyCode"></span></div>
+      <div class="row" style="justify-content:center">
+        <button class="btn small sun" id="btnCopyCode">📋 Copy invite link</button>
+      </div>
+      <p class="mtext" style="text-align:center; font-size:16px">Send it over — they open the link, or pick <i>Play Online → Join</i> and type the code.</p>
       <div id="lobbyPlayers" class="chips" style="justify-content:center; margin:14px 0"></div>
       <div class="row" style="justify-content:center">
         <button class="btn big boom" id="btnStartOnline" style="display:none">Start game</button>
-        <button class="btn small" id="btnWaitMore" style="display:none">Wait for more players</button>
         <span id="lobbyWait" style="font-size:17px; color:var(--ink-soft)">Waiting for the host to start…</span>
       </div>
       <div class="note">Keep the host's window open during the game — the host's device runs the deck.</div>
@@ -517,10 +586,11 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     <div id="handWrap">
       <div id="handInfo"></div>
       <div id="hand"></div>
-      <div id="reactBar"></div>
+      <div id="spyBar"></div>
       <div id="handBtns">
         <button class="btn sun" id="btnPlaySel" style="display:none">Play</button>
         <button class="btn boom" id="btnDraw" style="display:none">Draw &amp; end turn</button>
+        <button class="btn small ghost" id="btnSort" title="Sort your hand">⇅</button>
         <button class="btn small ghost" id="btnChat" style="display:none">💬</button>
         <button class="btn small ghost" id="btnQuit">Quit</button>
         <button class="btn small ghost" id="btnMute">🔊</button>
@@ -536,6 +606,10 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     <button class="btn big sun" id="curtainBtn">I'm ready!</button>
   </div>
 
+  <div id="reactRail">
+    <button id="reactToggle" title="React">😹</button>
+    <div id="reactBar"></div>
+  </div>
   <div id="chatPanel">
     <div id="chatHead"><span>Table talk 🐱</span><button id="chatClose">✕</button></div>
     <div id="chatLog"></div>
@@ -545,7 +619,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     </div>
   </div>
   <div id="modalBg"><div id="modal"></div></div>
-  <div id="pawmark">© 2026 Zoha 🐾 · build 9</div>
+  <div id="pawmark">© 2026 Zoha 🐾 · build 11</div>
   <div id="fx"></div>
 </div>
 <script>
@@ -795,7 +869,9 @@ function newGame(playerDefs){
 const alivePlayers=G=>G.players.filter(p=>p.alive);
 const curP=G=>G.players[G.turn];
 function emit(G,e){G.ev.push(e);}
-function log(G,msg){emit(G,{t:'log',msg});}
+/* Every log line carries the player it concerns, so the UI can colour-code it.
+   kind:'turn' marks a turn change, which renders as a divider rather than a line. */
+function log(G,msg,pid,kind){emit(G,{t:'log',msg,pid:(pid==null?null:pid),kind:kind||null});}
 
 function nextAliveIdx(G,from){
   let i=from;
@@ -807,7 +883,7 @@ function advance(G,forcedTurns){
   G.turnsLeft=forcedTurns||1;
   G.phase='turn';
   emit(G,{t:'turn',pid:G.turn,turnsLeft:G.turnsLeft});
-  if(!forcedTurns)log(G,`👉 ${G.players[G.turn].name}'s turn.`);
+  log(G,`${G.players[G.turn].name}'s turn`,G.turn,'turn');
 }
 function endOneTurn(G){ // after a draw / skip / defuse-insert
   G.turnsLeft--;
@@ -816,7 +892,7 @@ function endOneTurn(G){ // after a draw / skip / defuse-insert
 }
 function checkWin(G){
   const al=alivePlayers(G);
-  if(al.length===1){G.phase='over'; G.winner=al[0].id; emit(G,{t:'win',pid:al[0].id}); log(G,`🏆 ${al[0].name} wins!`); return true;}
+  if(al.length===1){G.phase='over'; G.winner=al[0].id; emit(G,{t:'win',pid:al[0].id}); log(G,`🏆 ${al[0].name} wins!`,al[0].id); return true;}
   return false;
 }
 function removeFromHand(p,types){ // remove one instance of each listed type; return false if missing
@@ -862,7 +938,7 @@ function dispatch(G,a){
       emit(G,{t:'play',pid:a.pid,cards:a.cards,kind:cls.kind,target:a.target});
       const tn=a.target!=null?` on ${G.players[a.target].name}`:'';
       const label=cls.kind==='PAIR'?`a pair of ${CARDS[a.cards[0]].name}s`:cls.kind==='TRIPLE'?`three ${CARDS[a.cards[0]].name}s`:cls.kind==='FIVE'?'five different cats':CARDS[a.cards[0]].name;
-      log(G,`${P.name} plays ${label}${tn}!`);
+      log(G,`${P.name} plays ${label}${tn}!`,a.pid);
       break;
     }
     case 'nope':{
@@ -871,7 +947,7 @@ function dispatch(G,a){
       G.discard.push('NOPE');
       G.pending.nopes.push(a.pid);
       emit(G,{t:'nope',pid:a.pid,count:G.pending.nopes.length});
-      log(G,G.pending.nopes.length%2?`${P.name} yells NOPE!`:`${P.name} nopes the Nope — it's back on!`);
+      log(G,G.pending.nopes.length%2?`${P.name} yells NOPE!`:`${P.name} nopes the Nope — it's back on!`,a.pid);
       break;
     }
     case 'closeNope':{
@@ -891,21 +967,21 @@ function dispatch(G,a){
           const nt=G.turnsLeft>=2?G.turnsLeft+2:2;
           G.turnsLeft=0;
           advance(G,nt);
-          log(G,`${curP(G).name} is under attack — ${nt} turns!`);
+          log(G,`${curP(G).name} is under attack — ${nt} turns!`,G.turn);
           break;
         }
-        case 'SKIP': log(G,`${actor.name} skips away on quiet little paws…`); endOneTurn(G); break;
-        case 'SHUFFLE': shuffleArr(G.deck); G.phase='turn'; emit(G,{t:'shuffled'}); log(G,'The deck gets a good shake.'); break;
+        case 'SKIP': log(G,`${actor.name} skips away on quiet little paws…`,pd.actor); endOneTurn(G); break;
+        case 'SHUFFLE': shuffleArr(G.deck); G.phase='turn'; emit(G,{t:'shuffled'}); log(G,`${actor.name} shuffles the deck.`,pd.actor); break;
         case 'FUTURE':{
           G.phase='turn';
           emit(G,{t:'future',pid:pd.actor,cards:G.deck.slice(-3).reverse()});
-          log(G,`${actor.name} peeks at the future… 👀`);
+          log(G,`${actor.name} peeks at the future… 👀`,pd.actor);
           break;
         }
         case 'FAVOR':{
           const T=G.players[pd.target];
-          if(!T.alive||T.hand.length===0){G.phase='turn'; log(G,`${T.name} has nothing to give!`);}
-          else{G.phase='favorGive'; G.pendingFavor={from:pd.target,to:pd.actor}; emit(G,{t:'favorAsk',from:pd.target,to:pd.actor}); log(G,`${T.name} must hand ${actor.name} a card…`);}
+          if(!T.alive||T.hand.length===0){G.phase='turn'; log(G,`${T.name} has nothing to give!`,pd.target);}
+          else{G.phase='favorGive'; G.pendingFavor={from:pd.target,to:pd.actor}; emit(G,{t:'favorAsk',from:pd.target,to:pd.actor}); log(G,`${T.name} must hand ${actor.name} a card…`,pd.target);}
           break;
         }
         case 'PAIR':{
@@ -916,8 +992,8 @@ function dispatch(G,a){
             const c=T.hand.splice(i,1)[0];
             actor.hand.push(c);
             emit(G,{t:'steal',from:pd.target,to:pd.actor,card:c});
-            log(G,`🐾 ${actor.name} swipes a random card from ${T.name}!`);
-          }else log(G,`${T.name} had nothing to steal!`);
+            log(G,`🐾 ${actor.name} swipes a random card from ${T.name}!`,pd.actor);
+          }else log(G,`${T.name} had nothing to steal!`,pd.target);
           break;
         }
         case 'TRIPLE':{
@@ -927,8 +1003,8 @@ function dispatch(G,a){
           if(i>=0){
             T.hand.splice(i,1); actor.hand.push(pd.named);
             emit(G,{t:'steal',from:pd.target,to:pd.actor,card:pd.named});
-            log(G,`${T.name} had a ${CARDS[pd.named].name} — handed over!`);
-          }else log(G,`${T.name} doesn't have a ${CARDS[pd.named].name}. Tough luck!`);
+            log(G,`${T.name} had a ${CARDS[pd.named].name} — handed over!`,pd.actor);
+          }else log(G,`${T.name} doesn't have a ${CARDS[pd.named].name}. Tough luck!`,pd.actor);
           break;
         }
         case 'FIVE':{
@@ -937,7 +1013,7 @@ function dispatch(G,a){
           if(pd.wish&&i>=0){
             G.discard.splice(i,1); actor.hand.push(pd.wish);
             emit(G,{t:'dig',pid:pd.actor,card:pd.wish});
-            log(G,`${actor.name} digs a ${CARDS[pd.wish].name} out of the discard pile!`);
+            log(G,`${actor.name} digs a ${CARDS[pd.wish].name} out of the discard pile!`,pd.actor);
           }else log(G,'The discard pile gave up nothing.');
           break;
         }
@@ -950,11 +1026,11 @@ function dispatch(G,a){
       if(c==='BOOM'){
         G.phase='defuse'; G.pendingBoom={pid:a.pid};
         emit(G,{t:'boomDrawn',pid:a.pid});
-        log(G,`💣 ${P.name} drew a KABOOM KITTEN!`);
+        log(G,`💣 ${P.name} drew a KABOOM KITTEN!`,a.pid);
       }else{
         P.hand.push(c);
         emit(G,{t:'draw',pid:a.pid,card:c});
-        log(G,`${P.name} draws a card from the deck. (${G.deck.length} left)`);
+        log(G,`${P.name} draws a card. (${G.deck.length} left in the deck)`,a.pid);
         endOneTurn(G);
       }
       break;
@@ -965,13 +1041,13 @@ function dispatch(G,a){
         G.discard.push('DEFUSE');
         G.phase='insert';
         emit(G,{t:'defused',pid:a.pid});
-        log(G,`✂️ ${P.name} defuses it! Now hiding it back in the deck…`);
+        log(G,`✂️ ${P.name} defuses it! Now hiding it back in the deck…`,a.pid);
       }else{
         P.alive=false;
         G.discard.push(...P.hand,'BOOM'); P.hand=[];
         G.pendingBoom=null;
         emit(G,{t:'exploded',pid:a.pid});
-        log(G,`💥 ${P.name} EXPLODED! ${alivePlayers(G).length} player${alivePlayers(G).length>1?'s':''} left.`);
+        log(G,`💥 ${P.name} EXPLODED! ${alivePlayers(G).length} left.`,a.pid);
         if(!checkWin(G)){G.turnsLeft=0; advance(G);}
       }
       break;
@@ -985,7 +1061,7 @@ function dispatch(G,a){
       G.deck.splice(G.deck.length-pos,0,'BOOM');
       G.pendingBoom=null;
       emit(G,{t:'inserted',pid:a.pid});
-      log(G,`${P.name} slips the kitten back… somewhere. 😼`);
+      log(G,`${P.name} slips the kitten back… somewhere. 😼`,a.pid);
       endOneTurn(G);
       break;
     }
@@ -996,7 +1072,7 @@ function dispatch(G,a){
       const to=G.players[G.pendingFavor.to];
       to.hand.push(c);
       emit(G,{t:'give',from:a.pid,to:to.id,card:c});
-      log(G,`${P.name} hands a card to ${to.name}.`);
+      log(G,`${P.name} hands a card to ${to.name}.`,a.pid);
       G.pendingFavor=null; G.phase='turn';
       break;
     }
@@ -1027,8 +1103,22 @@ const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},se
 SND = store.get('kk_snd')!=='0';
 
 /* ---------- tiny synth ---------- */
+/* Browsers create the AudioContext in a SUSPENDED state and only allow it to
+   start inside a real user gesture. Without this unlock, every sound silently
+   does nothing — which is exactly what happened before. We resume on the first
+   pointer/key/touch event and keep trying until it takes. */
 let AC=null;
-function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}return AC;}
+function ac(){
+  if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+  if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});
+  return AC;
+}
+function unlockAudio(){
+  const c=ac();
+  if(c&&c.state!=='running')return;                 // try again on the next gesture
+  ['pointerdown','keydown','touchstart'].forEach(ev=>document.removeEventListener(ev,unlockAudio,true));
+}
+['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,unlockAudio,true));
 function tone(f,dur,type='square',vol=.16,when=0,slide=0){
   if(!SND)return; const c=ac(); if(!c)return;
   const t=c.currentTime+when, o=c.createOscillator(), g=c.createGain();
@@ -1088,6 +1178,14 @@ const CARD_SOUND={
   CAT_UNCLE: ()=>{tone(392,.15,'square',.2,0);tone(330,.19,'square',.2,.15);     /* pom-pom horn */
                   for(let i=0;i<6;i++)noise(.05,.13,'lowpass',260,.34+i*.055);}, /* engine putter */
 };
+/* --- action & moment sounds --- */
+const sDeal=()=>{for(let i=0;i<7;i++)noise(.05,.16,'bandpass',1200+i*90,i*.07,3);};
+const sYourTurn=()=>{tone(660,.1,'sine',.13);tone(880,.15,'sine',.13,.1);tone(1180,.18,'sine',.1,.22);};
+const sTheirTurn=()=>tone(430,.09,'sine',.06);
+const sAttacked=()=>{tone(160,.14,'sawtooth',.26,0,-60);tone(120,.2,'sawtooth',.24,.13,-40);noise(.22,.2,'lowpass',700,.02);};
+const sJoin=()=>{tone(523,.1,'triangle',.13);tone(784,.14,'triangle',.13,.1);};
+const sChat=()=>{tone(1320,.06,'sine',.1);tone(1760,.08,'sine',.08,.06);};
+const sLose=()=>{[440,392,330,262].forEach((f,i)=>tone(f,.22,'triangle',.16,i*.16));};
 const sSteal=()=>{tone(880,.07,'triangle',.13,0,-260);tone(1180,.06,'triangle',.11,.07);noise(.08,.1,'highpass',4000,.02);};
 function playCardSound(t){const f=CARD_SOUND[t];if(f)f();else sPop();}
 
@@ -1153,7 +1251,7 @@ function startLocalGame(defs){
   G=newGame(defs); BOT_PEEK={}; selected=[]; HIDE_HAND=false;
   showChatUI(false);
   show('scr-table');
-  logMsg('Cards dealt. Good luck! 🐱');
+  sDeal();logMsg('Cards dealt. Good luck! 🐱');
   setTimeout(()=>logMsg('Today\'s cats: '+G.cats.map(c=>CARDS[c].name).join(', ')),2200);
   renderAll();
   if(MODE==='hot')curtainFor(G.turn,()=>{VIEW=G.turn;renderAll();});
@@ -1180,7 +1278,10 @@ function cardHTML(t,cls=''){
     <div class="inner"><div class="cname">${c.name}</div><div class="art">${ART[t]()}</div><div class="cdesc">${c.desc}</div></div></div>`;
 }
 function cardBackHTML(cls=''){return `<div class="card back ${cls}"><div class="inner"><div>${CARD_BACK_ART()}<div class="backpaw">KABOOM<br>KITTENS</div></div></div></div>`;}
+/* One colour per seat, reused everywhere that player appears: their chair, the
+   dot on their log lines, their reactions and their chat messages. */
 const AV_COLORS=['#ffc53d','#ff8fb5','#3fb0d8','#9b7ede','#58b368'];
+const pColor=pid=>AV_COLORS[pid%AV_COLORS.length];
 function avatarSVG(pid,dead){return svgWrap(catHead(50,54,30,AV_COLORS[pid%5],dead?'zen':'happy'));}
 
 function renderAll(){renderOpps();renderPiles();renderHand();renderBanner();}
@@ -1190,29 +1291,42 @@ function renderOpps(){
   const s=$('#seats'); if(!s)return;
   s.innerHTML='';
   const n=G.players.length;
+  const narrow=window.innerWidth<620;
+  const rx=narrow?38:50, ry=narrow?48:52;      // % of the oval — 50 sits right on the rim
   G.players.forEach(p=>{
     const rel=(((p.id-VIEW)%n)+n)%n;                 // 0 = me, then clockwise
     const a=(90+rel*(360/n))*Math.PI/180;            // 90deg = bottom of the table
-    const narrow=window.innerWidth<620;
-    const rx=narrow?38:50, ry=narrow?48:52;      // % of the oval — 50 sits right on the rim
-    const me=p.id===VIEW;
+    const me=p.id===VIEW, active=p.id===G.turn&&p.alive&&G.phase!=='over';
     const el=document.createElement('div');
-    el.className='opp seat'+(p.id===G.turn&&p.alive?' turn':'')+(p.alive?'':' dead')+(me?' mine':'');
+    el.className='opp seat'+(active?' turn':'')+(p.alive?'':' dead')+(me?' mine':'');
     el.id='opp'+p.id;
+    el.style.setProperty('--c',pColor(p.id));
     el.style.left=(50+rx*Math.cos(a))+'%';
-    el.style.top=(50+(me?ry*0.86:ry)*Math.sin(a))+'%';   // your own chair tucks just inside the rim
-    el.innerHTML='<div class="avatar">'+avatarSVG(p.id,!p.alive)+'</div>'+
+    el.style.top=(50+(me?ry*0.86:ry)*Math.sin(a))+'%';
+    el.innerHTML=
+      (active?'<div class="turnpill">'+(me?'YOUR TURN':'PLAYING')+(G.turnsLeft>1?' ×'+G.turnsLeft:'')+'</div>':'')+
+      '<div class="avatar">'+avatarSVG(p.id,!p.alive)+'</div>'+
       '<div class="nm">'+(me?'You':esc(p.name))+'</div>'+
       '<div class="cards">'+(p.alive?p.hand.length+' cards':'out')+'</div>'+
       (p.alive?'':'<div class="boomtag">💥</div>');
     s.appendChild(el);
+    if(active){                                       // an arrow on the felt pointing at them
+      const ptr=document.createElement('div');
+      ptr.className='turnPointer';
+      ptr.style.setProperty('--c',pColor(p.id));
+      ptr.style.left=(50+rx*0.66*Math.cos(a))+'%';
+      ptr.style.top=(50+ry*0.66*Math.sin(a))+'%';
+      ptr.style.transform='translate(-50%,-50%) rotate('+((90+rel*(360/n))+90)+'deg)';
+      s.appendChild(ptr);
+    }
   });
 }
 function renderPiles(){
   const dp=$('#deckPile');
   dp.querySelectorAll('.card').forEach(e=>e.remove());
   if(G.deck.length)dp.insertAdjacentHTML('beforeend',cardBackHTML());
-  $('#deckCount').textContent=G.deck.length+' left';
+  const booms=G.deck.filter(c=>c==='BOOM').length;
+  $('#deckCount').textContent=G.deck.length+' left'+(booms?' · 💣'+booms:'');
   dp.classList.toggle('mydraw',isMyTurn()&&G.phase==='turn');
   const dc=$('#discardPile');
   dc.querySelectorAll('.card').forEach(e=>e.remove());
@@ -1231,19 +1345,56 @@ function isMyTurn(){
   return G.turn===VIEW; // hot
 }
 function myHand(){return G.players[VIEW]?G.players[VIEW].hand:[];}
+
+/* Cards are grouped so matching ones sit together and the important stuff is on
+   the left. We only reorder the DISPLAY: the engine still addresses cards by
+   their real index in the hand, so `selected` always stores real indices. */
+const SORT_RANK={DEFUSE:0,NOPE:1,ATTACK:2,SKIP:3,FAVOR:4,SHUFFLE:5,FUTURE:6};
+let SORT_HAND=store.get('kk_sort')!=='0';
+function handOrder(){
+  const h=myHand(), idx=h.map((_,i)=>i);
+  if(!SORT_HAND)return idx;
+  const rank=t=>SORT_RANK[t]!==undefined?SORT_RANK[t]:10+CAT_TYPES.indexOf(t);
+  return idx.sort((a,b)=>rank(h[a])-rank(h[b])||h[a].localeCompare(h[b])||a-b);
+}
+let SPY=null;   // which player a ghost is currently peeking at
 function renderHand(){
   const h=$('#hand'); h.innerHTML='';
+  const ghost=G&&G.players[VIEW]&&!G.players[VIEW].alive;
+  $('#spyBar').style.display=ghost?'flex':'none';
+  if(ghost&&G.phase!=='over'){renderSpectator();return;}
   if(HIDE_HAND||!G||!G.players[VIEW]||!G.players[VIEW].alive){
     $('#btnPlaySel').style.display='none';$('#btnDraw').style.display='none';
-    if(G&&G.players[VIEW]&&!G.players[VIEW].alive&&G.phase!=='over')$('#handInfo').textContent='You exploded 💥 — haunting the table as a ghost cat…';
     return;
   }
-  myHand().forEach((t,i)=>{
+  handOrder().forEach(i=>{
+    const t=myHand()[i];
     h.insertAdjacentHTML('beforeend',cardHTML(t,selected.includes(i)?'sel':''));
     const el=h.lastElementChild;
     el.onclick=()=>{toggleSel(i)};
   });
   updateHandButtons();
+}
+/* Once you've exploded you get the run of the table: pick any player and see
+   their hand face-up. Defaults to whoever is currently playing. */
+function renderSpectator(){
+  $('#btnPlaySel').style.display='none';$('#btnDraw').style.display='none';
+  const alive=G.players.filter(p=>p.alive);
+  if(SPY==null||!G.players[SPY]||!G.players[SPY].alive)SPY=G.turn;
+  const bar=$('#spyBar'); bar.innerHTML='';
+  alive.forEach(p=>{
+    const c=document.createElement('button');
+    c.className='spyChip'+(p.id===SPY?' sel':'')+(p.id===G.turn?' playing':'');
+    c.style.setProperty('--c',pColor(p.id));
+    c.textContent=p.name+' ('+p.hand.length+')';
+    c.onclick=()=>{SPY=p.id;sPop();renderHand();};
+    bar.appendChild(c);
+  });
+  const h=$('#hand');
+  const sp=G.players[SPY];
+  $('#handInfo').innerHTML='👻 <b>Spectating</b> — you can see everyone\'s cards now';
+  sp.hand.forEach(t=>h.insertAdjacentHTML('beforeend',cardHTML(t,'spy')));
+  if(!sp.hand.length)h.innerHTML='<div style="color:var(--paper);opacity:.8">empty hand</div>';
 }
 function toggleSel(i){
   if(!isMyTurn()||G.phase!=='turn'){selected=[];renderHand();return;}
@@ -1280,22 +1431,35 @@ function renderBanner(msg){
     : `<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span> Play cards or draw to end your turn.`;
   else b.innerHTML=`<span class="disp">${cp.name}</span> is ${cp.bot?'plotting…':'playing…'}`;
 }
-/* Messages queue up and take turns — several events often land in the same instant. */
+/* Messages queue up and take turns — several events often land in the same
+   instant. Each line is tagged with its player's colour so you can tell at a
+   glance who it's about; turn changes render as a divider instead of a line. */
 const logQ=[]; let logBusy=false;
-function logMsg(m){logQ.push(m); if(!logBusy){logBusy=true; pumpLog();}}
+function logMsg(msg,pid,kind){logQ.push({msg,pid,kind}); if(!logBusy){logBusy=true; pumpLog();}}
 function pumpLog(){
   if(!logQ.length){logBusy=false;return;}
   const bar=$('#logbar');
   bar.querySelectorAll('.entry').forEach(old=>{
     old.style.opacity=0; old.style.transform='translateY(-16px)';
-    setTimeout(()=>old.remove(),300);
+    setTimeout(()=>old.remove(),280);
   });
+  const {msg,pid,kind}=logQ.shift();
   const e=document.createElement('div');
-  e.className='entry'; e.textContent=logQ.shift();
+  e.className='entry'+(kind==='turn'?' turnline':'');
+  const c=(pid!=null&&G&&G.players[pid])?pColor(pid):null;
+  if(kind==='turn'&&c){
+    e.style.setProperty('--c',c);
+    e.innerHTML='<span class="tl"></span>';
+    e.firstChild.textContent=(pid===VIEW?'Your turn':msg);
+  }else{
+    if(c){const d=document.createElement('span');d.className='dot';d.style.background=c;e.appendChild(d);}
+    e.appendChild(document.createTextNode(msg));
+    if(pid===VIEW)e.classList.add('mine');
+  }
   e.style.transform='translateY(16px)'; e.style.opacity=0;
   bar.appendChild(e);
   requestAnimationFrame(()=>{e.style.transform='translateY(0)'; e.style.opacity=1;});
-  setTimeout(pumpLog, logQ.length>3?480:1000);   // catch up when events pile in
+  setTimeout(pumpLog, logQ.length>3?460:kind==='turn'?900:1000);
 }
 
 /* ---------- fx ---------- */
@@ -1373,7 +1537,7 @@ function pickCardType(title,keys,cb){
 function processEvents(evs){
   evs.forEach(e=>{
     switch(e.t){
-      case 'log':logMsg(e.msg);break;
+      case 'log':logMsg(e.msg,e.pid,e.kind);break;
       case 'play':fxPlay(e.pid,e.cards[0]);if(e.pid===VIEW)NUDGE=true;break;
       case 'favorAsk':break;
       case 'nope':fxNope();break;
@@ -1382,8 +1546,9 @@ function processEvents(evs){
         if(e.pid===VIEW&&!HIDE_HAND)flash(`You drew a ${CARDS[e.card].name}.`);
         break;
       case 'boomDrawn':sUhoh();break;
+      case 'inserted':sSwish();break;
       case 'defused':sDefuse();break;
-      case 'exploded':fxBoom();break;
+      case 'exploded':fxBoom();if(e.pid===VIEW)setTimeout(sLose,700);break;
       case 'shuffled':sSwish();break;
       case 'steal':sSteal();
         if(e.to===VIEW)flash(`😼 You swiped their ${CARDS[e.card].name}!`);
@@ -1395,9 +1560,12 @@ function processEvents(evs){
         break;
       case 'dig':sPop();if(e.pid===VIEW)flash(`You fished out a ${CARDS[e.card].name}!`);break;
       case 'future':if(e.pid===VIEW&&(MODE!=='bots'||e.pid===0))showFuture(e.cards);break;
-      case 'win':fxConfetti();sWin();setTimeout(()=>showWin(e.pid),900);break;
-      case 'turn':selected=[];NUDGE=false;
-        if(e.pid===VIEW&&!HIDE_HAND){tone(660,.1,'sine',.11);tone(880,.14,'sine',.11,.1);}
+      case 'win':clearLocal();fxConfetti();sWin();setTimeout(()=>showWin(e.pid),900);break;
+      case 'turn':selected=[];NUDGE=false;SPY=null;
+        if(!HIDE_HAND){
+          if(e.pid===VIEW)e.turnsLeft>1?sAttacked():sYourTurn();
+          else sTheirTurn();
+        }
         break;
     }
   });
@@ -1432,7 +1600,15 @@ let chatUnread=0;
 function setupChatUI(){
   const bar=$('#reactBar');
   bar.innerHTML=REACTS.map(r=>`<button data-r="${r}">${r}</button>`).join('');
-  $$('#reactBar button').forEach(b=>b.onclick=()=>OL.react(b.dataset.r));
+  $$('#reactBar button').forEach(b=>b.onclick=()=>{OL.react(b.dataset.r);bar.classList.remove('open');});
+  $('#reactToggle').onclick=()=>bar.classList.toggle('open');
+  $('#btnSort').onclick=()=>{
+    SORT_HAND=!SORT_HAND;store.set('kk_sort',SORT_HAND?'1':'0');
+    $('#btnSort').textContent=SORT_HAND?'⇅':'🔀';
+    flash(SORT_HAND?'Hand sorted by type':'Hand in the order you drew it');
+    sPop();renderHand();
+  };
+  $('#btnSort').textContent=SORT_HAND?'⇅':'🔀';
   $('#btnChat').onclick=()=>{
     const p=$('#chatPanel');p.classList.toggle('on');
     if(p.classList.contains('on')){chatUnread=0;renderChatBadge();$('#chatInput').focus();}
@@ -1451,8 +1627,8 @@ function renderChatBadge(){
 }
 function showChatUI(on){
   $('#btnChat').style.display=on?'':'none';
-  $('#reactBar').style.display=on?'flex':'none';
-  if(!on)$('#chatPanel').classList.remove('on');
+  $('#reactRail').classList.toggle('on',!!on);
+  if(!on){$('#chatPanel').classList.remove('on');$('#reactBar').classList.remove('open');}
 }
 function addChatLine(name,text,mine){
   const log=$('#chatLog'); if(!log)return;
@@ -1463,18 +1639,50 @@ function addChatLine(name,text,mine){
   while(log.children.length>80)log.removeChild(log.firstChild);
   if(!$('#chatPanel').classList.contains('on')){chatUnread++;renderChatBadge();}
 }
-function floatReaction(name,emo){
+/* Each emoji has its own voice, so you can hear who reacted with what. */
+const REACT_SOUND={
+  '\u{1F639}':()=>melody([N.E,N.G,N.E,N.C2],.07,'square',.12,.08),
+  '\u{1F631}':()=>{tone(880,.35,'sine',.16,0,-560);noise(.2,.12,'highpass',2200,.05);},
+  '\u{1F63E}':()=>{tone(150,.26,'sawtooth',.2,0,-50);noise(.22,.13,'lowpass',500,0);},
+  '\u{1F44F}':()=>[0,.11,.22].forEach(t=>noise(.06,.3,'bandpass',1900,t,1.4)),
+  '\u{1F525}':()=>noise(.45,.22,'highpass',3400,0),
+  '\u{1F4A3}':()=>{tone(700,.5,'sine',.1,0,-620);noise(.12,.3,'lowpass',300,.5);},
+  '\u{1F640}':()=>{tone(520,.14,'triangle',.16);tone(760,.2,'triangle',.16,.12);},
+  '\u{1F63C}':()=>{tone(330,.12,'sine',.13,0,180);tone(500,.16,'sine',.11,.12,120);},
+};
+function floatReaction(name,emo,pid){
+  const col=pid!=null?pColor(pid):'#ffc53d';
   const d=document.createElement('div'); d.className='reactFloat';
-  d.innerHTML=`<div>${emo}</div>`;
+  d.style.setProperty('--c',col);
+  const face=document.createElement('div'); face.textContent=emo; d.appendChild(face);
   const s=document.createElement('span'); s.textContent=name; d.appendChild(s);
-  d.style.left=(12+Math.random()*70)+'vw'; d.style.bottom='22vh';
+  const fromRail=window.innerWidth>620;
+  if(fromRail)d.style.right='74px'; else d.style.left=(15+Math.random()*55)+'vw';
+  d.style.bottom=(28+Math.random()*14)+'vh';
   document.body.appendChild(d);
-  const an=d.animate([{transform:'translateY(0) scale(.5)',opacity:0},
-                      {transform:'translateY(-30px) scale(1.15)',opacity:1,offset:.22},
-                      {transform:'translateY(-150px) scale(1)',opacity:0}],
-                     {duration:2200,easing:'cubic-bezier(.2,.8,.3,1)'});
+  const an=d.animate([{transform:'translateY(20px) scale(.4) rotate(-12deg)',opacity:0},
+                      {transform:'translateY(-16px) scale(1.25) rotate(4deg)',opacity:1,offset:.2},
+                      {transform:'translateY(-40px) scale(1.05) rotate(-2deg)',opacity:1,offset:.55},
+                      {transform:'translateY(-170px) scale(.9)',opacity:0}],
+                     {duration:2400,easing:'cubic-bezier(.2,.75,.3,1)'});
   an.onfinish=()=>d.remove();
-  tone(660+Math.random()*400,.09,'sine',.1,0,180);
+  burstAt(d.getBoundingClientRect(),col);
+  (REACT_SOUND[emo]||(()=>tone(880,.1,'sine',.1,0,200)))();
+}
+/* a small colour-matched confetti pop where the reaction appears */
+function burstAt(r,col){
+  const cx=r.left+r.width/2, cy=r.top+r.height/2;
+  for(let i=0;i<12;i++){
+    const p=document.createElement('div');
+    p.style.cssText='position:fixed;z-index:92;width:8px;height:10px;pointer-events:none;border-radius:2px;background:'+col;
+    p.style.left=cx+'px'; p.style.top=cy+'px';
+    document.body.appendChild(p);
+    const ang=Math.random()*Math.PI*2, dist=40+Math.random()*70;
+    const a=p.animate([{transform:'translate(-50%,-50%) scale(1)',opacity:1},
+      {transform:`translate(${Math.cos(ang)*dist-50}%,${Math.sin(ang)*dist+60}%) rotate(${Math.random()*540}deg) scale(.4)`,opacity:0}],
+      {duration:900+Math.random()*500,easing:'cubic-bezier(.1,.7,.3,1)'});
+    a.onfinish=()=>p.remove();
+  }
 }
 
 /* ---------- local action routing ---------- */
@@ -1483,6 +1691,7 @@ function act(action){
   const ev=dispatch(G,action);
   if(ev===null){renderHand();return;}
   processEvents(ev);
+  saveLocal();
   afterChange();
 }
 
@@ -1673,11 +1882,52 @@ function botMove(){
   };
 })();
 
+/* ---------- surviving a reload ----------
+   Local games are snapshotted after every change; online games are restored
+   from the room itself (the state lives in the database). Either way a stray
+   refresh no longer ends your evening. */
+function saveLocal(){
+  if(MODE!=='bots'&&MODE!=='hot')return;
+  try{store.set('kk_local',JSON.stringify({MODE,VIEW,G,t:Date.now()}));}catch(e){}
+}
+function clearLocal(){store.set('kk_local','');}
+function offerResume(){
+  const btn=$('#btnResume');
+  let room=null,loc=null;
+  try{room=JSON.parse(store.get('kk_room')||'null');}catch(e){}
+  try{loc=JSON.parse(store.get('kk_local')||'null');}catch(e){}
+  const fresh=x=>x&&x.t&&(Date.now()-x.t)<12*3600e3;
+  if(fresh(room)){
+    btn.style.display='';btn.textContent='Rejoin room '+room.code;
+    btn.onclick=async()=>{
+      btn.disabled=true;btn.textContent='Reconnecting…';
+      try{await OL.rejoin(room);}
+      catch(e){btn.disabled=false;btn.textContent='That room is gone';OL.clearSession();
+        setTimeout(()=>{btn.style.display='none';},1800);}
+    };
+    return;
+  }
+  if(fresh(loc)&&loc.G&&loc.G.phase!=='over'){
+    btn.style.display='';btn.textContent='Resume your game';
+    btn.onclick=()=>{
+      G=loc.G;MODE=loc.MODE;VIEW=loc.VIEW;selected=[];HIDE_HAND=false;BOT_PEEK={};
+      showChatUI(false);show('scr-table');renderAll();
+      logMsg('Picked up right where you left off.');
+      afterChange();
+    };
+    return;
+  }
+  btn.style.display='none';
+}
+
 let rzT=null;
 window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(G)renderOpps();},180);});
 
 /* boot the chat / reaction controls once the DOM is in place */
 setupChatUI();
+offerResume();
+/* land straight on the online screen when someone opens an invite link */
+if(new URLSearchParams(location.search).get('room'))$('#btnOnline').click();
 /* ============================================================================
    ONLINE MODE — rooms synced through Firebase Realtime Database.
 
@@ -1728,6 +1978,8 @@ const OL=(()=>{
   /* ---------- lobby ---------- */
   $('#btnOnline').onclick=()=>{
     $('#inpDb').value=BAKED_DB||store.get('kk_db')||'';
+    const pre=new URLSearchParams(location.search).get('room');
+    if(pre)$('#inpRoom').value=pre.toUpperCase().slice(0,4);
     if(BAKED_DB)$('#onlineCfg').style.display='none';
     $('#inpNameOn').value=store.get('kk_name')||'';
     $('#onlineSetupPanel').style.display='';$('#lobbyPanel').style.display='none';clearErr();
@@ -1766,69 +2018,49 @@ const OL=(()=>{
     }catch(e){err(friendly(e));}
   };
   function enterLobby(){
-    started=false;lastSeq=-1;lastEvSeq=-1;evSeq=0;waitMode=false;clearAuto();
+    started=false;lastSeq=-1;lastEvSeq=-1;evSeq=0;
     chatPrimed=false;Object.keys(seenChat).forEach(k=>delete seenChat[k]);$('#chatLog').innerHTML='';
     $('#onlineSetupPanel').style.display='none';
     $('#lobbyPanel').style.display='';
     $('#lobbyCode').textContent=code;
-    $('#btnStartOnline').style.display=isHost?'':'none';
-    $('#lobbyWait').style.display=isHost?'none':'';
+    updateLobbyControls(playerCountIn(tree));
+    saveSession();
     listen();
   }
   const playerCountIn=t=>t&&t.players?Object.keys(t.players).filter(k=>t.players[k]).length:0;
-  let autoT=null, autoLeft=0, waitMode=false;
-  function clearAuto(){if(autoT){clearInterval(autoT);autoT=null;}}
 
-  /* Anyone can start once 2 are in the lobby. Guests ask the host's device, which runs the deck. */
+  /* No countdown, no hidden state: the host presses Start when they're ready.
+     A guest can ask, which just nudges the host's device. */
   $('#btnStartOnline').onclick=async()=>{
-    clearAuto();
     if(!isHost){
-      $('#lobbyWait').style.display='';$('#lobbyWait').textContent='Asking the host to deal…';
-      req('PATCH','',{startReq:Date.now()}).catch(()=>{
-        $('#lobbyWait').style.color='var(--boom-dk)';
-        $('#lobbyWait').textContent="Couldn't reach the room — check your connection.";
-      });
+      setLobbyMsg('Asked the host to deal — waiting…');
+      req('PATCH','',{startReq:Date.now()}).catch(()=>setLobbyMsg("Couldn't reach the room — check your connection.",1));
       return;
     }
     let ps=playerCountIn(tree);
     if(ps<2){try{const fresh=await req('GET','');if(fresh){tree=fresh;onTree();ps=playerCountIn(tree);}}catch(e){}}
-    if(ps<2){const w=$('#lobbyWait');w.style.display='';w.style.color='var(--boom-dk)';w.textContent='Waiting for one more player to join…';return;}
+    if(ps<2){setLobbyMsg('You need at least one more player before you can deal.',1);return;}
     startGameAsHost();
   };
-  $('#btnWaitMore').onclick=()=>{
-    waitMode=true;clearAuto();
-    $('#btnWaitMore').style.display='none';
-    const w=$('#lobbyWait');w.style.display='';w.style.color='var(--ink-soft)';
-    w.textContent='Holding for more players — hit Start when everyone\'s in.';
-  };
-
+  function setLobbyMsg(t,warn){
+    const w=$('#lobbyWait');w.style.display='';w.style.color=warn?'var(--boom-dk)':'var(--ink-soft)';w.textContent=t;
+  }
   function updateLobbyControls(n){
-    const b=$('#btnStartOnline'), w=$('#lobbyWait'), wm=$('#btnWaitMore');
-    w.style.display='';w.style.color='var(--ink-soft)';
-    if(n<2){
-      clearAuto();wm.style.display='none';b.style.display='none';
-      w.textContent=isHost?'Waiting for someone to join…':'Waiting for the host to start…';
-      return;
-    }
+    const b=$('#btnStartOnline');
     b.style.display='';
-    b.textContent=isHost?'Start game now':'Start game';
-    if(!isHost){wm.style.display='none';w.textContent='Ready when you are — or wait for the host.';return;}
-    if(waitMode){wm.style.display='none';w.textContent='Holding for more players — hit Start when everyone\'s in.';return;}
-    if(!autoT){
-      autoLeft=5;wm.style.display='';
-      w.textContent=`Everyone's here — dealing in ${autoLeft}…`;
-      autoT=setInterval(()=>{
-        autoLeft--;
-        if(autoLeft<=0){clearAuto();wm.style.display='none';
-          if(!started&&playerCountIn(tree)>=2)startGameAsHost();return;}
-        w.textContent=`Everyone's here — dealing in ${autoLeft}…`;
-      },1000);
+    b.disabled=n<2;
+    if(isHost){
+      b.textContent=n<2?'Waiting for players…':'Deal the cards ('+n+' players)';
+      setLobbyMsg(n<2?'Share the code above. You choose when to start — nothing happens until you do.'
+                     :'Everyone in? Hit the button when you\'re ready.');
+    }else{
+      b.textContent='Ask the host to start';
+      setLobbyMsg(n<2?'Waiting for more players to join…':'Waiting for the host to deal — you can nudge them.');
     }
   }
   function startGameAsHost(){
     const defs=Object.keys(tree.players).filter(k=>tree.players[k]).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
     G=newGame(defs);MODE='online';VIEW=myPid;selected=[];
-    clearAuto();
     pushSync([{t:'log',msg:'Cards dealt — good luck! 🐱'},
               {t:'log',msg:"Today's cats: "+G.cats.map(c=>CARDS[c].name).join(', ')}],{status:'playing',startReq:null});
     startedNow();
@@ -1883,10 +2115,10 @@ const OL=(()=>{
       Object.keys(ps).filter(k=>ps[k]).sort((a,b)=>a-b).forEach(k=>{
         lp.insertAdjacentHTML('beforeend',`<span class="chip ${+k===myPid?'sel':''}">${ps[k].name}${+k===0?' 👑':''}</span>`);
       });
-      if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;clearAuto();startedNow();}return;}
+      if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;startedNow();}return;}
       drainChat();
       const n=playerCountIn(tree);
-      if(isHost&&tree.startReq&&n>=2){clearAuto();startGameAsHost();return;}
+      if(isHost&&tree.startReq&&n>=2){startGameAsHost();return;}
       updateLobbyControls(n);
       return;
     }
@@ -1910,6 +2142,7 @@ const OL=(()=>{
   async function pushSync(evs,extra){
     tree=tree||{};tree.status='playing';
     tree.game={s:JSON.stringify(G),seq:G.seq,ev:JSON.stringify(evs||[]),evSeq:++evSeq};
+    saveSession();
     lastSeq=G.seq;lastEvSeq=evSeq;
     try{await req('PATCH','',Object.assign({game:tree.game},extra||{}));}catch(e){logMsg('⚠️ Sync hiccup — retrying…');setTimeout(()=>pushSync([],{}),1200);}
   }
@@ -1978,6 +2211,45 @@ const OL=(()=>{
     }
   }
 
+  /* Share link: the code in the URL so a friend lands straight in the join box. */
+  function inviteLink(){
+    const u=new URL(location.href); u.hash=''; u.searchParams.set('room',code);
+    return u.toString();
+  }
+  $('#btnCopyCode').onclick=async()=>{
+    const btn=$('#btnCopyCode'), link=inviteLink();
+    try{await navigator.clipboard.writeText(link);}
+    catch(e){
+      const ta=document.createElement('textarea');ta.value=link;document.body.appendChild(ta);
+      ta.select();try{document.execCommand('copy');}catch(_){}ta.remove();
+    }
+    btn.textContent='✅ Copied!';sPop();
+    setTimeout(()=>btn.textContent='📋 Copy invite link',1800);
+  };
+
+  /* ---------- surviving a reload ---------- */
+  function saveSession(){
+    try{store.set('kk_room',JSON.stringify({db,code,myPid,isHost,t:Date.now()}));}catch(e){}
+  }
+  function clearSession(){store.set('kk_room','');}
+  /* Rejoin a room we were already in: pull the live state and slot back into our seat. */
+  async function rejoin(s){
+    db=s.db;code=s.code;myPid=s.myPid;isHost=s.isHost;
+    const room=await req('GET','');
+    if(!room)throw new Error('gone');
+    tree=room;
+    MODE='online';VIEW=myPid;
+    if(room.status==='playing'&&room.game){
+      G=JSON.parse(room.game.s);
+      lastSeq=room.game.seq;lastEvSeq=room.game.evSeq||0;evSeq=room.game.evSeq||0;
+      started=true;show('scr-table');showChatUI(true);renderAll();
+      logMsg('Reconnected — you\'re back at the table.');
+      listen();hostPhaseDuties();onlinePhaseUI();
+    }else{
+      enterLobby();
+    }
+  }
+
   /* ---------- chat & reactions ---------- */
   function pushChat(obj){
     if(!db||!code)return;
@@ -1994,8 +2266,8 @@ const OL=(()=>{
       seenChat[k]=1;
       if(!chatPrimed)return;            // don't replay history on join
       const m=c[k]; if(!m)return;
-      if(m.r)floatReaction(m.n||'Someone',m.r);
-      else if(m.m)addChatLine(m.n||'Someone',m.m,m.p===myPid);
+      if(m.r)floatReaction(m.n||'Someone',m.r,m.p);
+      else if(m.m){addChatLine(m.n||'Someone',m.m,m.p===myPid);if(m.p!==myPid)sChat();}
     });
     chatPrimed=true;
     if(isHost&&keys.length>60)keys.slice(0,keys.length-40).forEach(k=>req('DELETE','/chat/'+k).catch(()=>{}));
@@ -2009,6 +2281,7 @@ const OL=(()=>{
   function leave(){
     stopListen();
     if(isHost&&db&&code)req('DELETE','').catch(()=>{});
+    clearSession();
     if(hostTimer)clearTimeout(hostTimer);
     started=false;tree=null;G=null;MODE=null;chatPrimed=false;
     showChatUI(false);$('#chatLog').innerHTML='';
@@ -2020,6 +2293,6 @@ const OL=(()=>{
     pushSync([{t:'log',msg:'New round! Cards dealt. 🐱'}]);
     renderAll();hostPhaseDuties();
   }
-  return {send,leave,restart,chat,react};
+  return {send,leave,restart,chat,react,saveSession,clearSession,rejoin};
 })();
 </script></body></html>
