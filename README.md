@@ -18,6 +18,10 @@ Take turns drawing cards and try not to explode. Skip your draw, attack your fri
 
 > **Side note for online play:** the game needs a small free database to sync moves between devices. If online mode asks for a URL, whoever runs this site can create one in about two minutes at [console.firebase.google.com](https://console.firebase.google.com) (*Build → Realtime Database → create in test mode*, then paste the database URL into the game — it's remembered after the first time, and everyone must use the same URL). To keep it working past test mode's 30 days, set the database rules to allow read/write under the `kaboom` path. Bots and Pass & Play need none of this.
 
+## Development
+
+The game is a static app with no build step or runtime dependencies. Run `npm run serve` and open `http://localhost:8000` for local development. Use `npm run validate` to syntax-check the JavaScript and run the game-engine test suite.
+
 ---
 
 © 2026 Zoha. Original art, names & code — a free fan-made game inspired by kitty-explosion card games. All the kaboom, none of the cards. 🐾

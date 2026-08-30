@@ -4,7 +4,7 @@
   KABOOM KITTENS — a fan-made card game of cats, luck and betrayal.
   © 2026 Zoha. Original art, names and code.
 
-  BUILD 24
+BUILD 24
   Deliberately not shown on screen — check this line to confirm which version a
   browser is actually running. If a fix seems missing, the page is probably
   cached: hard-refresh (Ctrl/Cmd+Shift+R) and re-check this number.
@@ -41,17 +41,16 @@
     11  lobby without a countdown, audio unlock, per-player colours, ghost-cat
         spectating, sorted hands, reaction rail, reload recovery
 
-  One self-contained HTML file: no build step, no dependencies, no external
-  assets. Fonts come from Google Fonts with a full fallback stack; every
-  illustration is generated SVG and every sound is synthesised at runtime.
+  A dependency-free static app: no build step or downloaded runtime packages.
+  Fonts come from Google Fonts with a full fallback stack; every illustration
+  is generated SVG and every sound is synthesised at runtime.
 
-  HOW THIS FILE IS ORGANISED
-    1. <style>   design tokens, the oval table, cards, chat, animations
-    2. markup    one <div class="screen"> per screen: title / setup / online / help / table
-    3. ART       hand-drawn-style SVG generators + the card catalogue (CARDS)
-    4. engine    pure rules — newGame() and dispatch(state, action) -> events
-    5. UI        rendering, sound, animation, bots, pass-and-play
-    6. OL        online rooms synced through Firebase Realtime Database
+  HOW THE SOURCE IS ORGANISED
+    1. index.html          styles and one <div class="screen"> per app screen
+    2. src/art.js         hand-drawn-style SVG generators
+    3. src/game-engine.js card catalogue and pure, testable game rules
+    4. src/index.js       rendering, sound, animation, bots, pass-and-play
+    5. src/online.js      rooms synced through Firebase Realtime Database
 
   ---------------------------------------------------------------------------
   DEBUGGING CHEAT SHEET — paste these into the browser console while playing
@@ -970,6 +969,7 @@ body.helping #btnHelp{display:none}
   <div id="pawmark">© 2026 Zoha</div>
   <div id="fx"></div>
 </div>
+<<<<<<< HEAD
 <script>
 /* ================= ORIGINAL CARD ART (hand-drawn wobbly SVG) ================= */
 const INK='#2a211c';
@@ -3215,6 +3215,5 @@ const OL=(()=>{
   return {send,leave,restart,chat,react,saveSession,clearSession,rejoin,quit,openInvite};
 })();
 
-/* Kick off an invite link once every handler above is in place. */
-OL.openInvite();
-</script></body></html>
+<script type="module" src="src/index.js"></script>
+</body></html>
