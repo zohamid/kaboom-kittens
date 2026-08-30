@@ -4,9 +4,23 @@
   KABOOM KITTENS — a fan-made card game of cats, luck and betrayal.
   © 2026 Zoha. Original art, names and code.
 
+  BUILD 15
+  Deliberately not shown on screen — check this line to confirm which version a
+  browser is actually running. If a fix seems missing, the page is probably
+  cached: hard-refresh (Ctrl/Cmd+Shift+R) and re-check this number.
+    15  build label moved off-screen into these docs
+    14  mobile card text made fully legible; self-correcting seat layout with a
+        compact fallback for landscape/tiny screens; "Play again" fixed (a new
+        round reset G.seq, so guests discarded it as stale — see `pub`)
+    13  no-overlap table geometry, working invite links, visible Nope timer,
+        graceful mid-game quits, side rail, new-round ceremony
+    12  verbose documentation pass + debugging cheat sheet (below)
+    11  lobby without a countdown, audio unlock, per-player colours, ghost-cat
+        spectating, sorted hands, reaction rail, reload recovery
+
   One self-contained HTML file: no build step, no dependencies, no external
   assets. Fonts come from Google Fonts with a full fallback stack; every
-  illustration is SVG and every sound is synthesised at runtime.
+  illustration is generated SVG and every sound is synthesised at runtime.
 
   HOW THIS FILE IS ORGANISED
     1. <style>   design tokens, the oval table, cards, chat, animations
@@ -57,7 +71,7 @@
                                  always holds real indices into the hand
 
   ---------------------------------------------------------------------------
-  THE ONE IDEA
+  THE ONE IDEA WORTH KNOWING
   The engine never touches the DOM. dispatch() mutates the game state and
   returns a list of events ({t:'draw'}, {t:'steal'}, {t:'log'}, …). The UI
   replays those events as animations, sounds and log lines. That separation is
@@ -204,6 +218,10 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   min-width:0; padding:5px 10px 4px; z-index:5}
 .seat.turn{z-index:6}
 .seat.turn{transform:translate(-50%,-50%) scale(1.07); box-shadow:0 5px 0 rgba(20,12,8,.35), 0 0 0 4px rgba(255,197,61,.5)}
+/* Applied by the collision solver when a chair has nowhere clear to go. */
+.seat.tight{transform:translate(-50%,-50%) scale(.78)}
+.seat.tight.turn{transform:translate(-50%,-50%) scale(.84)}
+.seat.tight .turnpill{font-size:9px; padding:1px 6px; top:-17px}
 .seat .avatar{width:40px; height:40px}
 .seat .nm{font-size:14px; max-width:92px}
 .seat .cards{font-size:12.5px}
@@ -237,11 +255,12 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .pile{position:relative; width:118px; height:165px; flex:0 0 auto}
 .pile .stackghost{position:absolute; inset:0; border-radius:12px; background:var(--felt-dk); border:3px solid rgba(0,0,0,.25)}
 .pile .count{
-  position:absolute; z-index:5; bottom:-12px; left:50%; transform:translateX(-50%);
-  background:var(--ink); color:var(--paper); font-family:var(--display); font-size:15px; letter-spacing:.05em;
-  border-radius:999px; padding:2px 12px; white-space:nowrap;
+  display:inline-block; background:var(--ink); color:var(--sun); font-family:var(--display); font-size:13px;
+  letter-spacing:.04em; border-radius:999px; padding:1px 9px; margin-left:5px; white-space:nowrap; opacity:1;
 }
-.pile .plabel{position:absolute; top:-24px; width:100%; text-align:center; color:var(--paper); font-family:var(--display); letter-spacing:.08em; font-size:15px; opacity:.85}
+/* Kept tight to the pile: any float upward eats into the ring the chairs sit on. */
+.pile .plabel{position:absolute; top:-20px; width:max-content; left:50%; transform:translateX(-50%);
+  text-align:center; color:var(--paper); font-family:var(--display); letter-spacing:.06em; font-size:13px; opacity:.9}
 #deckPile .card{position:absolute; inset:0; cursor:pointer}
 #deckPile.mydraw .card.back{animation:pulseDeck 1.4s ease-in-out infinite}
 @keyframes pulseDeck{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
@@ -289,6 +308,8 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #hand .card{flex:0 0 auto; margin-right:-34px; cursor:pointer; transition:transform .14s, margin .14s; transform-origin:bottom center}
 #hand .card:hover{transform:translateY(-14px) rotate(-1deg); z-index:30}
 #hand .card:last-child{margin-right:0}
+/* A tapped card lifts and jumps above its neighbours, so it is never partly
+   covered — important on phones where the hand is tightly packed. */
 #hand .card.sel{transform:translateY(-26px); z-index:31; box-shadow:0 0 0 4px var(--sun), var(--shadow)}
 #handBtns{display:flex; gap:12px; align-items:center; min-height:52px; flex-wrap:wrap; justify-content:center}
 
@@ -302,9 +323,12 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   font-family:var(--display); font-size:13px; letter-spacing:.03em; text-align:center; line-height:1.05;
   padding:4px 3px 2px; color:var(--cc,var(--ink)); background:var(--ct,transparent);
 }
-.card .art{flex:1; display:flex; align-items:center; justify-content:center; padding:2px}
+/* The art gives up space so the description never gets clipped: the text block
+   sizes itself to its content and the picture shrinks into whatever is left. */
+.card .art{flex:1 1 auto; min-height:0; display:flex; align-items:center; justify-content:center; padding:2px}
 .card .art svg{width:100%; height:100%; max-height:74px}
-.card .cdesc{font-size:10.5px; line-height:1.15; text-align:center; padding:2px 4px 4px; color:var(--ink-soft); min-height:40px}
+.card .cdesc{flex:0 0 auto; font-size:10.5px; line-height:1.16; text-align:center; padding:2px 4px 5px;
+  color:var(--ink-soft); min-height:40px}
 .card.back{background:var(--ink)}
 .card.back .inner{border-color:var(--sun); background:repeating-linear-gradient(45deg, #33261f 0 12px, #2a211c 12px 24px); align-items:center; justify-content:center}
 .card.back .backpaw{font-family:var(--display); color:var(--sun); font-size:19px; transform:rotate(-14deg); letter-spacing:.05em; text-align:center; line-height:1}
@@ -364,18 +388,29 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   .railBtn{width:34px; height:34px; font-size:16px}
   .railBtn.big{width:42px; height:42px; font-size:21px}
   #reactBar button{font-size:19px}
-  #feltOval,#seats{width:92%; height:74%}
-  #feltOval{border-width:7px}
-  .seat .avatar{width:32px; height:32px}
-  .seat .nm{font-size:12.5px; max-width:74px}
-  .seat .cards{font-size:11px}
-  .seat{padding:4px 7px 3px}
-  .card{width:96px; height:136px}
-  .card .cdesc{font-size:10px; min-height:24px}
-  .card .art svg{max-height:64px}
-  #hand .card{margin-right:-40px}
+  /* Phones: a taller table, smaller piles and slimmer chairs, so seats can sit
+     properly out on the rim instead of creeping in over the deck. */
+  #feltOval,#seats{width:92%; height:78%}
+  #feltOval{border-width:6px}
+  #centerPiles{gap:12px}
+  .pile{width:70px; height:100px}
+  .pile .plabel{font-size:10.5px; top:-16px; letter-spacing:.03em}
+  .pile .count{font-size:11px; padding:1px 7px; margin-left:4px}
+  .seat .avatar{width:26px; height:26px}
+  .seat .nm{font-size:11.5px; max-width:58px}
+  .seat .cards{font-size:10px}
+  .seat{padding:3px 5px 2px; min-width:0}
+  .turnpill{font-size:9.5px; padding:1px 6px; top:-19px; border-width:2px}
+  .card{width:106px; height:162px}
+  .card .cname{font-size:12px}
+  .card .cdesc{font-size:10.5px; line-height:1.18; min-height:46px}
+  .card .art svg{max-height:52px}
+  /* On a phone the cards barely overlap — you can read every one by scrolling
+     the hand sideways instead of squinting at slivers. */
+  #hand .card{margin-right:-10px}
+  #hand{padding:14px 12px 6px}
   .pile{width:96px; height:136px}
-  #tableMid{min-height:clamp(250px,38vh,330px)}
+  #tableMid{min-height:clamp(310px,46vh,410px)}
 }
 /* ---------- deck strip (hide the kitten) ---------- */
 .deckStrip{display:flex; align-items:center; overflow-x:auto; padding:14px 6px 10px; gap:0; background:var(--paper-dim); border:3px solid var(--ink); border-radius:14px; margin:10px 0}
@@ -476,7 +511,30 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #pawmark{position:fixed; right:8px; bottom:5px; z-index:55; font-size:11.5px; color:var(--paper); opacity:.55;
   font-family:var(--hand); pointer-events:none; text-shadow:0 1px 0 rgba(0,0,0,.45);
   max-width:52vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-#pawmark .bld{font-size:9.5px; opacity:.75; letter-spacing:.03em}
+/* ---------- compact layout ----------
+   Landscape handsets and very narrow phones: no oval, players in a row above
+   the piles. Everything is laid out by flexbox, so overlap is impossible. */
+@media (max-height:520px),(max-width:339px){
+  #tableMid{display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+    gap:6px; min-height:0; padding-top:2px}
+  #feltOval{display:none}
+  #seats.compact{position:static; transform:none; width:100%; height:auto; display:flex;
+    flex-wrap:wrap; gap:6px; justify-content:center; pointer-events:auto}
+  #seats.compact .seat,
+  #seats.compact .seat.turn,
+  #seats.compact .seat.tight{position:static; transform:none; opacity:1}
+  #seats.compact .seat.turn{box-shadow:0 4px 0 rgba(20,12,8,.35), 0 0 0 4px rgba(255,197,61,.6)}
+  #seats.compact .turnpill{position:static; display:inline-block; transform:none; margin:0 0 2px}
+  #centerPiles{position:static; transform:none; margin-top:16px}
+  .turnPointer{display:none}
+  .pile{width:62px; height:88px}
+  .pile .plabel{font-size:10px; top:-15px}
+  .card{width:92px; height:146px}
+  #hand{min-height:150px; padding:8px 10px 4px}
+  #hand .card{margin-right:-16px}
+  #logbar{min-height:26px; font-size:14px}
+  .credit{display:none}
+}
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
 }
@@ -651,15 +709,15 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
       <div id="feltOval"></div>
       <div id="seats"></div>
       <div id="centerPiles">
+        <!-- Label and counter share one chip ABOVE each pile: the space below is
+             where the local player's chair and its turn pill live. -->
         <div class="pile" id="deckPile">
-          <div class="plabel">DRAW</div>
+          <div class="plabel">DRAW <span class="count" id="deckCount">0</span></div>
           <div class="stackghost"></div>
-          <div class="count" id="deckCount">0</div>
         </div>
         <div class="pile" id="discardPile">
-          <div class="plabel">DISCARD</div>
+          <div class="plabel">DISCARD <span class="count" id="discardCount">0</span></div>
           <div class="stackghost"></div>
-          <div class="count" id="discardCount">0</div>
         </div>
       </div>
     </div>
@@ -706,7 +764,7 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   </div>
   <div id="announce"><div></div></div>
   <div id="modalBg"><div id="modal"></div></div>
-  <div id="pawmark">© 2026 Zoha <span class="bld">build 13</span></div>
+  <div id="pawmark">© 2026 Zoha</div>
   <div id="fx"></div>
 </div>
 <script>
@@ -1436,7 +1494,14 @@ const pColor=pid=>AV_COLORS[pid%AV_COLORS.length];
 function avatarSVG(pid,dead){return svgWrap(catHead(50,54,30,AV_COLORS[pid%5],dead?'zen':'happy'));}
 
 /* Redraw everything: seats, piles, hand, banner. */
-function renderAll(){renderOpps();renderPiles();renderHand();renderBanner();}
+function renderAll(){
+  renderOpps();renderPiles();renderHand();renderBanner();
+  /* The collision pass has to run LAST: the hand and the piles change the
+     height of the table, which moves every chair. Measuring before they are
+     drawn solves yesterday's layout. */
+  relaxSeats();
+  requestAnimationFrame(relaxSeats);          // again once the browser has settled
+}
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* Everyone gets a chair around the oval — you always sit at the bottom. */
 function renderOpps(){
@@ -1444,33 +1509,109 @@ function renderOpps(){
   s.innerHTML='';
   const n=G.players.length;
   const narrow=window.innerWidth<620;
-  const rx=narrow?38:50, ry=narrow?48:52;      // % of the oval — 50 sits right on the rim
+  /* Some viewports simply cannot hold a round table — a handset in landscape is
+     only ~380px tall, and a 320px phone is narrower than five chairs. There we
+     drop to a compact row of players above the piles: same information, no
+     collisions, no shrinking things into illegibility. */
+  const compact=isCompact();
+  $('#seats').classList.toggle('compact',compact);
+  const rx=narrow?46:50, ry=narrow?51:52;          // % of the oval — 50 sits on the rim
   G.players.forEach(p=>{
-    const rel=(((p.id-VIEW)%n)+n)%n;                 // 0 = me, then clockwise
-    const a=(90+rel*(360/n))*Math.PI/180;            // 90deg = bottom of the table
+    const rel=(((p.id-VIEW)%n)+n)%n;               // 0 = me, then clockwise
+    const deg=90+rel*(360/n), a=deg*Math.PI/180;   // 90deg = bottom of the table
     const me=p.id===VIEW, active=p.id===G.turn&&p.alive&&G.phase!=='over';
     const el=document.createElement('div');
     el.className='opp seat'+(active?' turn':'')+(p.alive?'':' dead')+(me?' mine':'');
     el.id='opp'+p.id;
     el.style.setProperty('--c',pColor(p.id));
-    el.style.left=(50+rx*Math.cos(a))+'%';
-    el.style.top=(50+(me?ry*0.86:ry)*Math.sin(a))+'%';
+    /* Remember the maths on the element so the collision pass below can move
+       this chair along its own spoke without recomputing the whole table. */
+    el.dataset.a=a; el.dataset.me=me?'1':'0';
+    el.dataset.rx=rx; el.dataset.ry=me?ry*0.86:ry;
     el.innerHTML=
       (active?'<div class="turnpill">'+(me?'YOUR TURN':'PLAYING')+(G.turnsLeft>1?' ×'+G.turnsLeft:'')+'</div>':'')+
       '<div class="avatar">'+avatarSVG(p.id,!p.alive)+'</div>'+
       '<div class="nm">'+(me?'You':esc(p.name))+'</div>'+
       '<div class="cards">'+(p.alive?p.hand.length+' cards':'out')+'</div>'+
       (p.alive?'':'<div class="boomtag">💥</div>');
+    if(!compact)placeSeat(el);                     // compact mode lets flexbox lay them out
     s.appendChild(el);
-    if(active){                                       // an arrow on the felt pointing at them
+    if(active&&!compact){                           // an arrow on the felt pointing at them
       const ptr=document.createElement('div');
       ptr.className='turnPointer';
       ptr.style.setProperty('--c',pColor(p.id));
       ptr.style.left=(50+rx*0.66*Math.cos(a))+'%';
       ptr.style.top=(50+ry*0.66*Math.sin(a))+'%';
-      ptr.style.transform='translate(-50%,-50%) rotate('+((90+rel*(360/n))+90)+'deg)';
+      ptr.style.transform='translate(-50%,-50%) rotate('+(deg+90)+'deg)';
       s.appendChild(ptr);
     }
+  });
+}
+/* Position one chair from the angle + radii stored on it (dA nudges it around
+   the ring, which buys the solver room on cramped screens). */
+function placeSeat(el){
+  const a=+el.dataset.a+(+el.dataset.da||0);
+  el.style.left=(50+(+el.dataset.rx)*Math.cos(a))+'%';
+  el.style.top =(50+(+el.dataset.ry)*Math.sin(a))+'%';
+}
+/* ---------- collision pass ----------
+   Trigonometry alone can't promise a clean table: the oval's proportions, the
+   player count, the phone's width and the length of a name all interact. So we
+   place the chairs, then MEASURE. Any chair (including its turn pill) that
+   lands on the piles, the banner, the log or the hand is slid along its own
+   spoke until it finds clear air. Deterministic, and it holds for 2-5 players
+   at any screen size. */
+const isCompact=()=>window.innerHeight<520||window.innerWidth<340;
+function relaxSeats(){
+  if(isCompact())return;                           // flexbox already guarantees no overlap
+  const hit=(a,b)=>!(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom);
+  const area=(a,b)=>Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*
+                    Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
+  const zones=['#centerPiles','.plabel','#topbar','#logbar','#handWrap']
+    .flatMap(sel=>[...document.querySelectorAll(sel)])
+    .map(e=>e.getBoundingClientRect())
+    .filter(r=>r.width&&r.height);
+  const W=window.innerWidth;
+  /* a chair's true footprint includes the pill floating above it */
+  const box=el=>{
+    const r=el.getBoundingClientRect(), p=el.querySelector('.turnpill');
+    if(!p)return r;
+    const q=p.getBoundingClientRect();
+    return {left:Math.min(r.left,q.left),right:Math.max(r.right,q.right),
+            top:Math.min(r.top,q.top),bottom:Math.max(r.bottom,q.bottom)};
+  };
+  const cost=el=>{
+    const r=box(el);
+    let c=zones.reduce((s,z)=>s+area(r,z),0);
+    if(r.left<2)c+=(2-r.left)*400;                 // never let a chair leave the screen
+    if(r.right>W-2)c+=(r.right-(W-2))*400;
+    return c;
+  };
+  const RAD=[0,3,6,9,12,15,18,-3,-6,-9];         // slide along the spoke
+  const ANG=[0,.14,-.14,.28,-.28,.42,-.42];       // …and shuffle round the ring
+  [...document.querySelectorAll('#seats .seat')].forEach(el=>{
+    const rx0=+el.dataset.rx, ry0=+el.dataset.ry;
+    const mine=el.dataset.me==='1';
+    /* Two passes: normal size first, then a smaller chair as a last resort for
+       genuinely cramped screens (a 320px phone, or landscape on a handset). */
+    const search=()=>{
+      let best={d:0,da:0}, bestCost=Infinity;
+      outer:
+      for(const da of (mine?[0,.1,-.1]:ANG)){      // your own chair stays put-ish
+        for(const d of RAD){
+          el.dataset.rx=rx0+d; el.dataset.ry=ry0+d; el.dataset.da=da;
+          placeSeat(el);
+          const c=cost(el);
+          if(c<bestCost){bestCost=c;best={d,da};}
+          if(c===0)break outer;                    // clear air: stop looking
+        }
+      }
+      el.dataset.rx=rx0+best.d; el.dataset.ry=ry0+best.d; el.dataset.da=best.da;
+      placeSeat(el);
+      return bestCost;
+    };
+    el.classList.remove('tight');
+    if(search()>0){ el.classList.add('tight'); if(search()>0)el.classList.remove('tight'); }
   });
 }
 /* Draw and discard piles, plus the deck counter and attack badge. */
@@ -1556,7 +1697,12 @@ function renderSpectator(){
 function toggleSel(i){
   if(!isMyTurn()||G.phase!=='turn'){selected=[];renderHand();return;}
   const k=selected.indexOf(i);
-  if(k>=0)selected.splice(k,1);else selected.push(i);
+  if(k>=0)selected.splice(k,1);
+  else{
+    selected.push(i);
+    const c=CARDS[myHand()[i]];                    // spell the card out in full —
+    if(c)flash(c.name+' — '+c.desc);               // guarantees legibility on a phone
+  }
   renderHand();
 }
 /* Enable/label the Play and Draw buttons for the current selection. */
@@ -1798,8 +1944,15 @@ function showWin(pid){
     <div style="width:130px;margin:6px auto">${avatarSVG(pid,false)}</div>
     <p class="mtext">All the other kittens went kaboom. Purr-fection!</p>
     <div class="mrow"><button class="btn big boom" id="mAgain">Play again</button><button class="btn" id="mHome">Menu</button></div>`);
-  $('#mAgain').onclick=()=>{closeModal();
-    if(MODE==='online'){OL.restart();return;}
+  $('#mAgain').onclick=()=>{
+    if(MODE==='online'){
+      const r=OL.restart();
+      if(r==='asked'){                              // guests wait for the host
+        const b=$('#mAgain');b.disabled=true;b.textContent='Asked the host…';
+      }else closeModal();
+      return;
+    }
+    closeModal();
     startLocalGame(G.players.map(p=>({name:p.name.replace(' 🤖','')+(p.bot?' 🤖':''),bot:p.bot})));};
   $('#mHome').onclick=()=>{closeModal();if(MODE==='online')OL.leave();show('scr-title')};
 }
@@ -2190,6 +2343,16 @@ offerResume();
 const OL=(()=>{
   let db=null, code=null, myPid=null, isHost=false, es=null, pollIv=null, tree=null;
   let lastSeq=-1, lastEvSeq=-1, evSeq=0, hostTimer=null, started=false, uiPhaseKey='';
+  /* `pub` is a publish counter that NEVER resets, unlike G.seq which starts
+     again at 0 every round. Guests compare against this to decide whether a
+     payload is newer than what they already have — comparing G.seq meant a
+     brand new round (seq 0) looked older than the finished game (seq 30+) and
+     was thrown away, which is what broke "Play again". */
+  let pub=0, lastPub=-1;
+  /* Which room player sits in which game seat. Room ids can have gaps once
+     somebody quits, so seat index != room id and we must translate. */
+  let seats=[];
+  const seatIndex=()=>{const i=seats.indexOf(String(myPid));return i<0?0:i;};
 
   const base=()=>`${db}/kaboom/rooms/${code}`;
   /* One REST call against this room. Firebase speaks plain JSON over HTTP:
@@ -2302,13 +2465,20 @@ const OL=(()=>{
       setLobbyMsg(n<2?'Waiting for more players to join…':'Waiting for the host to deal — you can nudge them.');
     }
   }
-  /* Host only: deal a new game and publish it to everyone. */
+  /* Host only: deal a fresh game to everyone currently in the room and publish
+     it. Used for the first deal AND for every rematch — same code path, so a
+     rematch can never drift out of step with a first game. */
   function startGameAsHost(){
-    const defs=Object.keys(tree.players).filter(k=>tree.players[k]).sort((a,b)=>a-b).map(k=>({name:tree.players[k].name}));
-    G=newGame(defs);MODE='online';VIEW=myPid;selected=[];
+    const keys=Object.keys(tree.players).filter(k=>tree.players[k]).sort((a,b)=>a-b);
+    seats=keys;                                   // anyone who quit is simply not here
+    const defs=keys.map(k=>({name:tree.players[k].name}));
+    G=newGame(defs);MODE='online';selected=[];
+    VIEW=seatIndex();
+    closeModal();                                 // clear the game-over popup
     pushSync([{t:'newround'},
               {t:'log',msg:'Cards dealt — good luck! 🐱'},
-              {t:'log',msg:"Today's cats: "+G.cats.map(c=>CARDS[c].name).join(', ')}],{status:'playing',startReq:null});
+              {t:'log',msg:"Today's cats: "+G.cats.map(c=>CARDS[c].name).join(', ')}],
+             {status:'playing',startReq:null,rematchReq:null});
     startedNow();
   }
   /* Switch to the table once the game exists. */
@@ -2376,15 +2546,27 @@ const OL=(()=>{
       return;
     }
     drainChat();
-    if(isHost){drainInbox();return;} // host is source of truth for game state
+    if(isHost){
+      drainInbox();
+      /* A guest tapped "Play again" while we were sitting on the game-over
+         screen — deal the next round for everyone. */
+      if(tree.rematchReq&&G&&G.phase==='over')startGameAsHost();
+      return;                        // host is source of truth for game state
+    }
     applyRemoteGame();
   }
   /* Guest side: adopt newer state from the host and replay its events.
      Anything with seq <= lastSeq is old news and ignored. */
   function applyRemoteGame(){
     const g=tree.game;
-    if(!g||g.seq==null||g.seq<=lastSeq)return;
+    if(!g)return;
+    /* Prefer the never-resetting publish counter; fall back to seq only if an
+       older client published without one. */
+    if(g.pub!=null){ if(g.pub<=lastPub)return; lastPub=g.pub; }
+    else if(g.seq==null||g.seq<=lastSeq)return;
     lastSeq=g.seq;
+    if(g.seats){try{seats=JSON.parse(g.seats);}catch(e){}}
+    VIEW=seatIndex();                              // our chair may have moved
     G=JSON.parse(g.s);
     // arrays survive JSON stringify — restore defaults just in case
     G.players.forEach(p=>{p.hand=p.hand||[]});G.deck=G.deck||[];G.discard=G.discard||[];
@@ -2397,9 +2579,10 @@ const OL=(()=>{
   /* Host side: publish the current state plus the events it produced. */
   async function pushSync(evs,extra){
     tree=tree||{};tree.status='playing';
-    tree.game={s:JSON.stringify(G),seq:G.seq,ev:JSON.stringify(evs||[]),evSeq:++evSeq};
+    tree.game={s:JSON.stringify(G),seq:G.seq,pub:++pub,seats:JSON.stringify(seats),
+               ev:JSON.stringify(evs||[]),evSeq:++evSeq};
     saveSession();
-    lastSeq=G.seq;lastEvSeq=evSeq;
+    lastSeq=G.seq;lastEvSeq=evSeq;lastPub=pub;
     try{await req('PATCH','',Object.assign({game:tree.game},extra||{}));}catch(e){logMsg('⚠️ Sync hiccup — retrying…');setTimeout(()=>pushSync([],{}),1200);}
   }
   const seenInbox={};
@@ -2503,7 +2686,10 @@ const OL=(()=>{
     MODE='online';VIEW=myPid;
     if(room.status==='playing'&&room.game){
       G=JSON.parse(room.game.s);
+      if(room.game.seats){try{seats=JSON.parse(room.game.seats);}catch(e){}}
+      VIEW=seatIndex();
       lastSeq=room.game.seq;lastEvSeq=room.game.evSeq||0;evSeq=room.game.evSeq||0;
+      pub=room.game.pub||0;lastPub=pub;
       started=true;show('scr-table');showChatUI(true);renderAll();
       logMsg('Reconnected — you\'re back at the table.');
       listen();hostPhaseDuties();onlinePhaseUI();
@@ -2552,15 +2738,17 @@ const OL=(()=>{
     started=false;tree=null;G=null;MODE=null;chatPrimed=false;
     showChatUI(false);$('#chatLog').innerHTML='';
   }
-  /* Host only: deal a fresh round to the same players. */
+  /* "Play again". A guest can only ask — the host owns the deck — so we drop a
+     rematchReq in the room and the host picks it up in onTree(). */
   function restart(){
-    if(!isHost){logMsg('Waiting for the host to start a new round…');return;}
-    const defs=G.players.map(p=>({name:p.name}));
-    G=newGame(defs);selected=[];
-    pushSync([{t:'newround'},
-              {t:'log',msg:'New round! Cards dealt. 🐱'},
-              {t:'log',msg:"Today's cats: "+G.cats.map(c=>CARDS[c].name).join(', ')}]);
-    renderAll();hostPhaseDuties();
+    if(!isHost){
+      req('PATCH','',{rematchReq:Date.now()})
+        .then(()=>logMsg('Asked the host for another round…'))
+        .catch(()=>logMsg('⚠️ Couldn\'t reach the room.'));
+      return 'asked';
+    }
+    startGameAsHost();                             // one code path for every deal
+    return 'dealt';
   }
   /* Someone opened an invite link (…?room=ABCD). This runs at the very end of
      the file — the click handlers above must already be wired, which is exactly
@@ -2594,7 +2782,10 @@ const OL=(()=>{
       return;
     }
     send({a:'leave',pid:myPid});                    // host removes us and play continues
-    setTimeout(()=>{leave();show('scr-title');},450);
+    setTimeout(()=>{
+      req('DELETE','/players/'+myPid).catch(()=>{});  // and give up the seat for good
+      leave();show('scr-title');
+    },450);
   }
 
   return {send,leave,restart,chat,react,saveSession,clearSession,rejoin,quit,openInvite};
