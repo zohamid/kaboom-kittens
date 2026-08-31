@@ -3,6 +3,10 @@
 import { CARDS, CAT_TYPES, CAT_TYPE_INDEX, newGame, dispatch, classifyPlay, playNeedsTarget } from './game-engine.js';
 import { ART, CARD_BACK_ART, HERO_ART, catHead, svgWrap } from './art.js';
 import { createOnlineClient } from './online.js';
+import { createDomHelpers, escapeHtml } from './services/dom.js';
+import { loadPreferences, savePreferences, toggleSound, toggleHandSort, toggleShowKittens } from './services/preferences.js';
+import { saveLocalGame, clearLocalGame, loadLocalGame, saveRoomSession, clearRoomSession, loadRoomSession, isLocalSnapshotFresh, isRoomSessionFresh } from './services/saved-games.js';
+import { createAudioService } from './services/audio.js';
 
 /**
  * @typedef {'bots'|'hot'|'online'} GameMode
@@ -52,10 +56,6 @@ let HIDE_HAND=false;
  */
 let selected=[];
 /**
- * @type {boolean}
- */
-let SND=true;
-/**
  * @type {Record<number, {cards: CardType[], deckAt: number}>}
  */
 let BOT_PEEK={};
@@ -67,9 +67,19 @@ let NOPE_TIMER=null;
  * @type {boolean}
  */
 let NUDGE=false;
-const $=q=>document.querySelector(q), $$=q=>[...document.querySelectorAll(q)];
-const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
-SND = store.get('kk_snd')!=='0';
+
+const { q, qq } = createDomHelpers(document);
+const $ = q, $$ = qq;
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+const prefs = loadPreferences(localStorage);
+let SND = prefs.soundEnabled;
+let SORT_HAND = prefs.handSorted;
+let SHOW_KITTENS = prefs.showKittens;
+
+const audio = createAudioService(() => {
+  try { return new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+});
 
 /* ---------- online client ---------- */
 let onlineClient = null;
@@ -102,7 +112,7 @@ function createOnlineClientInstance() {
     cardHTML,
     floatReaction,
     addChatLine,
-    sChat: () => { tone(1320,.06,'sine',.1); tone(1760,.08,'sine',.08,.06); },
+    sChat: () => audio.sChat(),
     showChatUI,
     getSnapshot: () => ({ G, MODE, VIEW }),
     submitAction: (action) => {
@@ -136,95 +146,6 @@ function getOnlineClient() {
   return onlineClient;
 }
 
-/* ---------- tiny synth ---------- */
-/* Browsers create the AudioContext in a SUSPENDED state and only allow it to
-   start inside a real user gesture. Without this unlock, every sound silently
-   does nothing — which is exactly what happened before. We resume on the first
-   pointer/key/touch event and keep trying until it takes. */
-let AC=null;
-function ac(){
-  if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
-  if(AC&&AC.state==='suspended')AC.resume().catch(()=>{});
-  return AC;
-}
-function unlockAudio(){
-  const c=ac();
-  if(c&&c.state!=='running')return;                 // try again on the next gesture
-  ['pointerdown','keydown','touchstart'].forEach(ev=>document.removeEventListener(ev,unlockAudio,true));
-}
-['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev,unlockAudio,true));
-/* One oscillator beep. f=Hz, slide bends the pitch over the note's life.
-   Everything you hear in this game is built from tone() and noise(). */
-function tone(f,dur,type='square',vol=.16,when=0,slide=0){
-  if(!SND)return; const c=ac(); if(!c)return;
-  const t=c.currentTime+when, o=c.createOscillator(), g=c.createGain();
-  o.type=type; o.frequency.setValueAtTime(f,t);
-  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(30,f+slide),t+dur);
-  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
-  o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+.02);
-}
-const sPop=()=>tone(520,.09,'square',.14,0,220);
-const sSwish=()=>tone(880,.12,'sine',.1,0,-500);
-const sNope=()=>{tone(300,.1,'sawtooth',.16);tone(180,.16,'sawtooth',.16,.09);};
-const sUhoh=()=>{tone(392,.14,'triangle',.18);tone(311,.24,'triangle',.18,.16);};
-const sBoom=()=>{if(!SND)return;const c=ac();if(!c)return;const t=c.currentTime,b=c.createBuffer(1,c.sampleRate*.6,c.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2);const s=c.createBufferSource(),g=c.createGain();s.buffer=b;g.gain.setValueAtTime(.5,t);g.gain.exponentialRampToValueAtTime(.001,t+.6);s.connect(g);g.connect(c.destination);s.start(t);tone(70,.5,'sine',.3,0,-40);};
-const sWin=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,.18,'triangle',.16,i*.13));};
-const sDefuse=()=>{tone(700,.06,'square',.14);tone(1000,.09,'square',.14,.07);};
-/* noise burst with a filter — crunches, sizzles, whooshes, growls */
-function noise(dur,vol,type,freq,when=0,q=1){
-  if(!SND)return; const c=ac(); if(!c)return;
-  const t=c.currentTime+when, n=Math.max(1,Math.floor(c.sampleRate*dur));
-  const buf=c.createBuffer(1,n,c.sampleRate), d=buf.getChannelData(0);
-  for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/n,1.4);
-  const src=c.createBufferSource(); src.buffer=buf;
-  const f=c.createBiquadFilter(); f.type=type; f.frequency.value=freq; f.Q.value=q;
-  const g=c.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
-  src.connect(f); f.connect(g); g.connect(c.destination); src.start(t); src.stop(t+dur);
-}
-const melody=(notes,step=.11,type='triangle',vol=.15,dur=.13)=>notes.forEach((f,i)=>{if(f)tone(f,dur,type,vol,i*step);});
-const N={C:523,D:587,E:659,F:698,G:784,A:880,B:988,C2:1047,G_:392,E_:330,A_:440};
-
-/* every card gets its own silly voice */
-const CARD_SOUND={
-  ATTACK: ()=>{tone(90,.16,'sawtooth',.3,0,-40); noise(.14,.34,'lowpass',900,.02); tone(660,.08,'square',.16,.13);},
-  SKIP:   ()=>{noise(.3,.18,'highpass',1400,0); tone(1200,.22,'sine',.12,0,-800);},
-  FAVOR:  ()=>{tone(430,.3,'sine',.16,0,260); tone(560,.22,'sine',.12,.16,180);},
-  SHUFFLE:()=>{for(let i=0;i<11;i++)noise(.035,.16,'bandpass',1500+i*130,i*.032,3);},
-  FUTURE: ()=>{melody([N.C,N.E,N.G,N.C2,N.B],.075,'sine',.13,.16); tone(1760,.5,'sine',.05,.2);},
-  NOPE:   ()=>{tone(300,.1,'sawtooth',.18);tone(180,.18,'sawtooth',.18,.09);},
-  DEFUSE: ()=>{tone(760,.05,'square',.15);tone(1080,.07,'square',.15,.06);noise(.12,.1,'highpass',3000,.02);},
-  /* --- the cats --- */
-  CAT_SAMOSA: ()=>{noise(.09,.4,'bandpass',2600,0,1.6);noise(.07,.3,'bandpass',3400,.09,1.6);noise(.06,.22,'bandpass',2100,.16,1.6);},
-  CAT_DISCO:  ()=>{melody([N.A_,N.C,N.E,N.A],.085,'sawtooth',.11,.1);
-                   [0,.085,.17,.255].forEach(t=>noise(.03,.13,'highpass',7000,t));
-                   tone(110,.1,'sine',.24,0);tone(110,.1,'sine',.24,.17);},
-  CAT_PICKLE: ()=>{tone(180,.16,'sine',.2,0,520);tone(700,.14,'sine',.16,.14,-480);noise(.06,.12,'bandpass',900,.26,2);},
-  CAT_MELON:  ()=>{melody([N.G,N.G,N.A,N.G,N.C2,N.B],.115,'triangle',.15,.14);},   /* nursery-rhyme sing-song */
-  CAT_TACHE:  ()=>{tone(70,.34,'sawtooth',.26,0,26); noise(.3,.16,'lowpass',420,0,.7);   /* grrrr */
-                   tone(520,.14,'sine',.13,.3,420);},                                    /* …and a twirl */
-  CAT_JALEBI: ()=>{noise(.26,.2,'highpass',5200,0);                                      /* sizzle */
-                   melody([N.E,N.G,N.C2,N.E*2],.07,'sine',.12,.12);},
-  CAT_LUNGI:  ()=>{noise(.22,.2,'bandpass',700,0,.8);                                    /* fabric flap */
-                   tone(120,.13,'sine',.28,.06);tone(95,.16,'sine',.26,.2);tone(150,.1,'sine',.2,.34);}, /* dhol */
-  CAT_CHAI:  ()=>{noise(.34,.17,'bandpass',1100,0,.9);          /* pour */
-                  tone(1500,.05,'sine',.1,.3);tone(2100,.06,'sine',.09,.36);   /* spoon clink */
-                  noise(.16,.13,'lowpass',600,.44);},                           /* slurp */
-  CAT_RICKSHAW:()=>{[0,.16].forEach(t=>{tone(1980,.13,'sine',.13,t);tone(2640,.11,'sine',.1,t+.02);}); /* tring tring */
-                    noise(.2,.09,'bandpass',2800,.3,4);},                        /* wheel squeak */
-  CAT_UNCLE: ()=>{tone(392,.15,'square',.2,0);tone(330,.19,'square',.2,.15);     /* pom-pom horn */
-                  for(let i=0;i<6;i++)noise(.05,.13,'lowpass',260,.34+i*.055);}, /* engine putter */
-};
-/* --- action & moment sounds --- */
-const sDeal=()=>{for(let i=0;i<7;i++)noise(.05,.16,'bandpass',1200+i*90,i*.07,3);};
-const sYourTurn=()=>{tone(660,.1,'sine',.13);tone(880,.15,'sine',.13,.1);tone(1180,.18,'sine',.1,.22);};
-const sTheirTurn=()=>tone(430,.09,'sine',.06);
-const sAttacked=()=>{tone(160,.14,'sawtooth',.26,0,-60);tone(120,.2,'sawtooth',.24,.13,-40);noise(.22,.2,'lowpass',700,.02);};
-const sJoin=()=>{tone(523,.1,'triangle',.13);tone(784,.14,'triangle',.13,.1);};
-const sChat=()=>{tone(1320,.06,'sine',.1);tone(1760,.08,'sine',.08,.06);};
-const sLose=()=>{[440,392,330,262].forEach((f,i)=>tone(f,.22,'triangle',.16,i*.16));};
-const sSteal=()=>{tone(880,.07,'triangle',.13,0,-260);tone(1180,.06,'triangle',.11,.07);noise(.08,.1,'highpass',4000,.02);};
-function playCardSound(t){const f=CARD_SOUND[t];if(f)f();else sPop();}
-
 /* ---------- screens ---------- */
 /* Switch screens. Exactly one .screen carries .on at a time. */
 function show(id){
@@ -235,7 +156,11 @@ $('#heroArt').innerHTML=HERO_ART();
 $('#curtainArt').innerHTML=svgWrap(catHead(50,54,30,'#ffc53d','happy'));
 $$('.backBtn').forEach(b=>b.onclick=()=>{show('scr-title')});
 $('#btnHelp').onclick=()=>{renderHelp();show('scr-help')};
-$('#btnMute').onclick=()=>{SND=!SND;store.set('kk_snd',SND?'1':'0');$('#btnMute').textContent=SND?'🔊':'🔇';
+$('#btnMute').onclick=()=>{
+  const nextPrefs = toggleSound(localStorage);
+  SND = nextPrefs.soundEnabled;
+  audio.setEnabled(SND);
+  $('#btnMute').textContent=SND?'🔊':'🔇';
 };
 $('#btnMute').textContent=SND?'🔊':'🔇';
 
@@ -294,7 +219,7 @@ function startLocalGame(defs){
   G=newGame(defs); BOT_PEEK={}; selected=[]; HIDE_HAND=false;
   showChatUI(false);
   show('scr-table');
-  announce('NEW ROUND!');sDeal();
+  announce('NEW ROUND!');audio.sDeal();
   dealAnimation(()=>logMsg('Cards dealt. Good luck! 🐱'));
   setTimeout(()=>logMsg('Today\'s cats: '+G.cats.map(c=>CARDS[c].name).join(', ')),2200);
   renderAll();
@@ -490,10 +415,6 @@ const BOT_PREF_MAP=Object.fromEntries(
   ['CAT_SAMOSA','CAT_DISCO','CAT_PICKLE','CAT_MELON','CAT_TACHE','SHUFFLE','FAVOR','FUTURE','SKIP','ATTACK','NOPE','DEFUSE']
     .map((t,i)=>[t,i])
 );
-let SORT_HAND=store.get('kk_sort')!=='0';
-/* Off by default: counting kittens is part of the game. The 💣 button on the
-   side rail turns it on for anyone who'd rather see it. */
-let SHOW_KITTENS=store.get('kk_bombs')==='1';
 function handOrder(){
   const h=myHand(), idx=h.map((_,i)=>i);
   if(!SORT_HAND)return idx;
@@ -530,7 +451,7 @@ function renderSpectator(){
     c.className='spyChip'+(p.id===SPY?' sel':'')+(p.id===G.turn?' playing':'');
     c.style.setProperty('--c',pColor(p.id));
     c.textContent=p.name+' ('+p.hand.length+')';
-    c.onclick=()=>{SPY=p.id;sPop();renderHand();};
+    c.onclick=()=>{SPY=p.id;audio.sPop();renderHand();};
     bar.appendChild(c);
   });
   const h=$('#hand');
@@ -648,14 +569,14 @@ function flyCard(html,from,to,dur=500){
 /* A card flies to the discard pile and plays its own sound. */
 function fxPlay(pid,type){
   const from=pid===VIEW?rectOf($('#hand'))||rectOf($('#discardPile')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#deckPile')));
-  flyCard(cardHTML(type),from,rectOf($('#discardPile')));playCardSound(type);
+  flyCard(cardHTML(type),from,rectOf($('#discardPile')));audio.playCardSound(type);
 }
 /* A face-down card flies from the deck to a player. */
 function fxDraw(pid){
   const to=pid===VIEW?rectOf($('#hand')):($('#opp'+pid)?rectOf($('#opp'+pid)):rectOf($('#hand')));
-  flyCard(cardBackHTML(),rectOf($('#deckPile')),to);sSwish();
+  flyCard(cardBackHTML(),rectOf($('#deckPile')),to);audio.sSwish();
 }
-function fxNope(){const s=document.createElement('div');s.className='nopeStamp';s.textContent='NOPE!';document.body.appendChild(s);setTimeout(()=>s.remove(),850);sNope();}
+function fxNope(){const s=document.createElement('div');s.className='nopeStamp';s.textContent='NOPE!';document.body.appendChild(s);setTimeout(()=>s.remove(),850);audio.sNope();}
 let flashT=null;
 function flash(msg){
   const el=$('#handInfo'); if(!el)return;
@@ -665,7 +586,7 @@ function flash(msg){
 /* Full-screen flash, screen shake and a bang. */
 function fxBoom(){
   const f=document.createElement('div');f.className='boomFlash';document.body.appendChild(f);setTimeout(()=>f.remove(),950);
-  document.body.classList.add('shake');setTimeout(()=>document.body.classList.remove('shake'),550);sBoom();
+  document.body.classList.add('shake');setTimeout(()=>document.body.classList.remove('shake'),550);audio.sBoom();
 }
 /* Victory confetti. */
 function fxConfetti(){
@@ -747,28 +668,28 @@ function processEvents(evs){
       case 'draw':fxDraw(e.pid);
         if(e.pid===VIEW&&!HIDE_HAND)flash(`You drew a ${CARDS[e.card].name}.`);
         break;
-      case 'boomDrawn':sUhoh();break;
-      case 'inserted':sSwish();break;
-      case 'defused':sDefuse();break;
-      case 'left':sSwish();break;
-      case 'newround':announce('NEW ROUND!');sDeal();dealAnimation();break;
-      case 'exploded':fxBoom();if(e.pid===VIEW)setTimeout(sLose,700);break;
-      case 'shuffled':sSwish();break;
-      case 'steal':sSteal();
+      case 'boomDrawn':audio.sUhoh();break;
+      case 'inserted':audio.sSwish();break;
+      case 'defused':audio.sDefuse();break;
+      case 'left':audio.sSwish();break;
+      case 'newround':announce('NEW ROUND!');audio.sDeal();dealAnimation();break;
+      case 'exploded':fxBoom();if(e.pid===VIEW)setTimeout(audio.sLose,700);break;
+      case 'shuffled':audio.sSwish();break;
+      case 'steal':audio.sSteal();
         if(e.to===VIEW)flash(`😼 You swiped their ${CARDS[e.card].name}!`);
         else if(e.from===VIEW)flash(`😾 They swiped your ${CARDS[e.card].name}!`);
         break;
-      case 'give':sPop();
+      case 'give':audio.sPop();
         if(e.to===VIEW)flash(`🎁 You were handed a ${CARDS[e.card].name}.`);
         else if(e.from===VIEW)flash(`You handed over your ${CARDS[e.card].name}.`);
         break;
-      case 'dig':sPop();if(e.pid===VIEW)flash(`You fished out a ${CARDS[e.card].name}!`);break;
+      case 'dig':audio.sPop();if(e.pid===VIEW)flash(`You fished out a ${CARDS[e.card].name}!`);break;
       case 'future':if(e.pid===VIEW&&(MODE!=='bots'||e.pid===0))showFuture(e.cards);break;
-      case 'win':clearLocal();fxConfetti();sWin();setTimeout(()=>showWin(e.pid),900);break;
+      case 'win':clearLocal();fxConfetti();audio.sWin();setTimeout(()=>showWin(e.pid),900);break;
       case 'turn':selected=[];NUDGE=false;SPY=null;
         if(!HIDE_HAND){
-          if(e.pid===VIEW)e.turnsLeft>1?sAttacked():sYourTurn();
-          else sTheirTurn();
+          if(e.pid===VIEW)e.turnsLeft>1?audio.sAttacked():audio.sYourTurn();
+          else audio.sTheirTurn();
         }
         break;
     }
@@ -821,17 +742,19 @@ function setupChatUI(){
   $$('#reactBar button').forEach(b=>b.onclick=()=>{getOnlineClient().react(b.dataset.r);bar.classList.remove('open');});
   $('#reactToggle').onclick=()=>{bar.classList.toggle('open');$('#reactToggle').classList.remove('hintme');};
   $('#btnKittens').onclick=()=>{
-    SHOW_KITTENS=!SHOW_KITTENS;store.set('kk_bombs',SHOW_KITTENS?'1':'0');
+    const nextPrefs = toggleShowKittens(localStorage);
+    SHOW_KITTENS = nextPrefs.showKittens;
     $('#btnKittens').classList.toggle('off',!SHOW_KITTENS);
     flash(SHOW_KITTENS?'Showing kittens left in the deck':'Kitten counter hidden — count them yourself 😼');
-    sPop();if(G)renderPiles();
+    audio.sPop();if(G)renderPiles();
   };
   $('#btnKittens').classList.toggle('off',!SHOW_KITTENS);
   $('#btnSort').onclick=()=>{
-    SORT_HAND=!SORT_HAND;store.set('kk_sort',SORT_HAND?'1':'0');
+    const nextPrefs = toggleHandSort(localStorage);
+    SORT_HAND = nextPrefs.handSorted;
     $('#btnSort').textContent=SORT_HAND?'⇅':'🔀';
     flash(SORT_HAND?'Hand sorted by type':'Hand in the order you drew it');
-    sPop();renderHand();
+    audio.sPop();renderHand();
   };
   $('#btnSort').textContent=SORT_HAND?'⇅':'🔀';
   $('#btnChat').onclick=()=>{
