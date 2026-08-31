@@ -4,10 +4,16 @@
   KABOOM KITTENS — a fan-made card game of cats, luck and betrayal.
   © 2026 Zoha. Original art, names and code.
 
-  BUILD 23
+  BUILD 24
   Deliberately not shown on screen — check this line to confirm which version a
   browser is actually running. If a fix seems missing, the page is probably
   cached: hard-refresh (Ctrl/Cmd+Shift+R) and re-check this number.
+    24  mobile hand back to a four-per-row grid (the build-22 fan was fiddly to
+        tap); side rail returns to the edge on phones so the button row under
+        the hand carries only Play / Draw / sort / chat / Quit; room codes are
+        checked for collisions before being claimed and abandoned rooms are
+        swept after 12h (see /kaboom/index and sweepStaleRooms); the quit
+        dialog now colours "Keep playing" red and "I'm feline done" plain
     23  final pass: cheat sheet refreshed, dead code removed, comments audited
     22  hero artwork no longer clipped (the fuse spark sat above the frame);
         title screen compacted so the rules line stays above the fold
@@ -58,7 +64,7 @@
     G.phase                    'turn'|'nope'|'defuse'|'insert'|'favorGive'|'over'
     G.turn / G.turnsLeft       whose turn, and how many turns they owe
     MODE / VIEW                'bots'|'hot'|'online', and which seat is yours
-    PEEK / SPY / SORT_HAND     tapped card, spectated player, hand sorting
+    SPY / SORT_HAND            spectated player, hand sorting on/off
 
     renderAll()                force a full redraw (seats, piles, hand, banner)
     dispatch(G,{a:'draw',pid:0})       apply a move by hand (local games)
@@ -80,6 +86,10 @@
       kk_bombs  '1' = show kittens-left counter on the deck
     localStorage.clear()       forget everything and start fresh
 
+    Database layout (one node per room — rooms never see each other):
+      /kaboom/rooms/<CODE>   status, players, game, inbox, chat, startReq…
+      /kaboom/index/<CODE>   creation time only, so the sweep stays cheap
+
   COMMON SYMPTOMS -> WHERE TO LOOK
     No sound at all ............ ac() is suspended; see unlockAudio()
     Online game won't start .... updateLobbyControls() / playerCountIn()
@@ -100,8 +110,20 @@
     Chairs overlap something ... relaxSeats() measures AFTER renderAll and
                                  slides each chair along its spoke; add the
                                  offending element to its `zones` list
-    Hand looks wrong on a phone  layoutFan() (arc + PEEK); desktop uses
-                                 layoutTilt(), which only rotates
+    Hand looks wrong on a phone  it is pure CSS — the four-per-row grid in the
+                                 max-width:620px block. layoutFan() only clears
+                                 stale inline transforms there; desktop uses
+                                 layoutTilt(), which just rotates each card
+    Rail buttons in the wrong
+    place ...................... placeRail() re-homes mute / 💣 / 😹 into
+                                 #sideRail; the row under the hand keeps only
+                                 Play / Draw / sort / chat / Quit
+    Room code clobbered a game   codeIsFree() must run before the PUT in
+                                 btnCreateRoom — a PUT replaces the whole node
+    Database filling with dead
+    rooms ...................... sweepStaleRooms() + the /kaboom/index node
+                                 (CODE -> creation time); rooms untouched for
+                                 STALE_MS are deleted, 15 per sweep
     Cards wrong after a steal
     or a sort .................. handOrder() reorders DISPLAY only; `selected`
                                  always holds real indices into the hand
@@ -447,10 +469,28 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .futureFan .slot .lab{font-family:var(--display); font-size:14px; color:var(--ink-soft); margin-top:6px}
 
 @media (max-width:620px){
-  /* A phone has no free edge to float a rail on — it always lands on someone's
-     chair. So on mobile these controls join the button row under the hand,
-     where normal flow layout makes overlap impossible. (See placeRail().) */
-  #sideRail{display:none !important}
+  /* ---------- the side rail, on phones too (BUILD 24) ----------
+     Build 21 folded mute / 💣 / 😹 into the button row under the hand on the
+     theory that a phone has no spare edge. In practice the crowded row was
+     worse than the rail ever was: five buttons of two different shapes on one
+     line, and the emoji tray opening upwards over the cards. The rail is back
+     at the right edge, just smaller. It is safe there because relaxSeats()
+     already counts #sideRail as a no-go zone, so chairs slide along their spoke
+     to avoid it. The row under the hand is left with the game actions only:
+     Play, Draw, sort, chat, Quit. (See placeRail().) */
+  #sideRail{right:5px; gap:7px}
+  .railBtn{width:34px; height:34px; font-size:16px}
+  .railBtn.big{width:40px; height:40px; font-size:20px}
+  .railHint{display:none}
+  /* The emoji tray opens INWARD from its toggle, so it cannot run off the right
+     edge of a narrow screen, and wraps into a block instead of a tall column.
+     Written as #sideRail #reactBar on purpose: this media query sits ABOVE the
+     rail's own rules in the file, so a plain #reactBar selector would lose the
+     tie on flex-direction and the tray would stay a column. */
+  #sideRail #reactBar{position:absolute; right:44px; top:50%; transform:translateY(-50%);
+    flex-direction:row; flex-wrap:wrap; width:min(200px,56vw); justify-content:center;
+    border-radius:20px; z-index:60}
+  #sideRail #reactBar button{font-size:20px}
   /* Keep the control row to ONE line — a second row pushed it off the bottom
      of the screen on 740px-tall phones. */
   #handBtns{position:relative; gap:7px; min-height:46px}
@@ -460,13 +500,6 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   #btnHelp .q{font-size:20px}
   #btnHelp .lbl{font-size:9px}
   #handInfo{min-height:26px}
-  #handBtns .railBtn{width:32px; height:32px; font-size:15px}
-  #handBtns .railBtn.big{width:32px; height:32px; font-size:16px}
-  #handBtns #reactWrap{position:static}
-  #handBtns #reactBar{position:absolute; bottom:48px; right:4px; flex-direction:row; flex-wrap:wrap;
-    width:min(250px,74vw); justify-content:center; z-index:60}
-  .railHint{display:none}
-  #reactBar button{font-size:20px}
   /* Phones: a taller table, smaller piles and slimmer chairs, so seats can sit
      properly out on the rim instead of creeping in over the deck. */
   #feltOval,#seats{width:92%; height:78%}
@@ -480,38 +513,51 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   .seat .cards{font-size:10px}
   .seat{padding:3px 5px 2px; min-width:0}
   .turnpill{font-size:9.5px; padding:1px 6px; top:-19px; border-width:2px}
-  /* Exactly four to a row on any phone width: the card sizes itself to a
-     quarter of the hand rather than to a fixed pixel width, so 8 cards always
-     land in two tidy rows with nothing cut off. */
   .card{width:104px; height:150px}
   .card .cname{font-size:11px; padding:3px 2px 1px; line-height:1.02}
   .card .cdesc{display:none}          /* shown in full above the hand on tap */
   .card .art{padding:1px}
-  .card .art svg{max-height:78px}
-  /* selection is shown by the ring; the lift is handled by the fan maths */
-  #hand .card.sel{box-shadow:0 0 0 4px var(--sun), var(--shadow)}
+  .card .art svg{max-height:70px}
   /* the tapped-card readout has to carry the text the cards no longer show */
   #handInfo{font-size:15px; line-height:1.25; max-width:96vw; white-space:normal; min-height:34px}
-  /* ---------- the hand on a phone: a real fan ----------
-     Cards overlap the way they do in your actual hand, splayed on an arc, so
-     the whole hand is on screen at once however many cards you hold. Tapping
-     one pulls it out of the fan at full size with its description — see
-     layoutFan() and PEEK in the UI layer. Cards are absolutely positioned, so
-     the fan's spacing is computed in JS from the real measured width. */
-  /* Tall enough that the enlarged peek card stays INSIDE the hand area instead
-     of riding up over the log line above it. */
-  #hand{position:relative; display:block; overflow:visible;
-    height:232px; min-height:232px; max-height:none; padding:4px 4px 0}
-  #hand .card{position:absolute; left:50%; top:6px; margin:0;
-    transform-origin:50% 88%; will-change:transform;
-    transition:transform .2s cubic-bezier(.2,.9,.3,1.2), box-shadow .2s}
-  #hand .card .cdesc{display:none}
-  /* the tapped card leaves the fan: upright, larger, and readable */
-  #hand .card.peek{z-index:60 !important; transform-origin:50% 50%;
-    box-shadow:0 0 0 4px var(--sun), 0 10px 0 rgba(20,12,8,.35)}
-  #hand .card.peek .cdesc{display:block; font-size:11px; line-height:1.2; min-height:0}
-  #hand .card.peek .cname{font-size:13px}
-  #hand .card.peek .art svg{max-height:70px}
+  /* ---------- the hand on a phone: four to a row (BUILD 24) ----------
+     The build-22 arc/fan is gone. Overlapping cards were awkward to hit with a
+     thumb, and the tapped card growing out of the arc fought with everything
+     around it. Back to the layout that worked: a plain wrapped grid, four cards
+     to a row, so a full 8-card hand is two tidy rows with every card completely
+     visible and independently tappable. There is no JS positioning here at all —
+     flex-wrap does the whole job, and layoutFan() simply strips any leftover
+     inline transform on mobile. */
+  /* width:100% matters more than it looks: #handWrap centres its children, so
+     without it #hand shrinks to fit its contents — and the cards below size
+     themselves as a PERCENTAGE of #hand, which makes that circular and
+     collapses them to a thumbnail. Pin the width and the percentages resolve. */
+  #hand{position:static; width:100%; display:flex; flex-wrap:wrap; justify-content:center;
+    align-content:flex-start; gap:5px 4px; height:auto; min-height:0; max-height:none;
+    overflow:visible; padding:4px 2px 0}
+  /* One column-width of the row, whatever the screen width, so the row always
+     divides exactly with nothing cut off. --cols is 4 for a normal 8-card hand
+     and rises as the hand grows (set in layoutFan), which keeps a big hand to
+     two rows by making the cards narrower rather than by adding rows forever.
+     The dvh cap shrinks the cards on a short phone so the hand plus the table
+     still fit above the fold; the plain px value on the line before it is the
+     fallback for browsers without dvh. */
+  /* position:relative, NOT static — .card is the containing block for its
+     absolutely-positioned .inner, and making it static silently stretches the
+     card's whole face to the size of the viewport (blank white cards). */
+  #hand .card{position:relative; flex:0 0 auto; margin:0;
+    width:calc(100% / var(--cols,4) - 4px); height:auto; aspect-ratio:104/150;
+    max-width:100px;
+    max-width:min(100px,13.5dvh);
+    transform:none; transition:box-shadow .14s}
+  /* No hover lift and no selection lift: in a grid a raised card would cover
+     its neighbours, and the gold ring already says which cards are picked. */
+  #hand .card:hover{transform:none !important}
+  #hand .card.sel{transform:none; box-shadow:0 0 0 4px var(--sun), var(--shadow)}
+  /* The name shrinks a point for every extra column, so a long one like
+     "Rickshaw Cat" still fits a narrow card instead of being clipped mid-word:
+     11px at 4 columns, 10px at 5, 9px at 6. */
+  #hand .card .cname{font-size:calc(11px - (var(--cols,4) - 4) * 1px)}
   .pile{width:96px; height:136px}
   #tableMid{min-height:clamp(258px,35vh,340px)}
 }
@@ -683,8 +729,8 @@ body.helping #btnHelp{display:none}
    single overlapping row here. (A narrow PORTRAIT phone still gets the grid.) */
 @media (max-height:520px){
   .card{width:92px; height:146px}
-  #hand{display:flex; flex-wrap:nowrap; overflow-x:auto; max-height:none; min-height:150px; padding:8px 10px 4px}
-  #hand .card{margin-right:-16px; width:92px; height:146px; aspect-ratio:auto}
+  #hand{display:flex; flex-wrap:nowrap; gap:0; overflow-x:auto; max-height:none; min-height:150px; padding:8px 10px 4px}
+  #hand .card{margin-right:-16px; width:92px; max-width:none; height:146px; aspect-ratio:auto}
 }
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -1858,42 +1904,35 @@ function handOrder(){
   const rank=t=>SORT_RANK[t]!==undefined?SORT_RANK[t]:10+CAT_TYPES.indexOf(t);
   return idx.sort((a,b)=>rank(h[a])-rank(h[b])||h[a].localeCompare(h[b])||a-b);
 }
-let PEEK=null;  // index of the card pulled out of the fan for a proper look
-/* ---------- the phone fan ----------
-   Lays the hand out as an overlapping arc. Everything is measured live: the
-   step between cards shrinks as the hand grows, so 3 cards or 13 cards both
-   fit the width without scrolling. The peeked card leaves the arc entirely —
-   upright, bigger, on top, with its description showing. */
+/* ---------- hand layout ----------
+   Two very different jobs behind one name (kept, so every existing caller and
+   the resize handler still work):
+
+     desktop  — layoutTilt() gives the single overlapping row a few degrees of
+                per-card rotation and a shallow bow, so it reads as a hand you
+                are holding rather than a filing cabinet.
+     phone    — BUILD 24 replaced the absolutely-positioned arc with a plain
+                wrapped CSS grid (see the max-width:620px block), so there is no
+                positioning to do. Two small jobs remain:
+
+                * pick how many columns the grid uses. A hand is normally 8
+                  cards, which is 4 + 4 — but hands grow: Attack forces two
+                  draws, Favor and cat combos hand you other people's cards, and
+                  a hoarder can easily sit on a dozen. Rather than piling up
+                  rows (which pushes the hand off the bottom of the screen), the
+                  columns go up and the cards get narrower, so a hand stays two
+                  rows all the way to twelve cards. Past that it wraps to a
+                  third row, which beats shrinking the art into confetti.
+                  ceil(n/2) is just "half the hand per row"; clamped to 4..6.
+
+                * strip any inline transform the desktop tilt left behind, for
+                  instance after rotating a phone from landscape to portrait. */
 function layoutFan(){
   const h=$('#hand'); if(!h)return;
   const cards=[...h.querySelectorAll('.card')];
-  if(window.innerWidth>=620){layoutTilt(cards);return;} // desktop gets a tilt instead
-  if(!cards.length)return;
-  const cw=cards[0].offsetWidth||104;
-  const avail=(h.clientWidth||window.innerWidth)-10;
-  const n=cards.length;
-  /* how far apart the cards sit; never wider than a card, never so tight that
-     the artwork disappears */
-  const step=n>1?Math.max(26,Math.min(cw*0.92,(avail-cw)/(n-1))):0;
-  const spread=n>1?Math.min(4.5,26/n):0;                // degrees per card
-  cards.forEach((c,i)=>{
-    const t=i-(n-1)/2;
-    const x=t*step-cw/2;
-    const arc=Math.abs(t)*(spread*0.9);                 // slight bow, like a real hand
-    if(+c.dataset.i===PEEK){
-      /* Nudge the enlarged card inwards if it would hang off the edge — at the
-         ends of the fan on a narrow phone it otherwise overflows. */
-      const half=(h.clientWidth||window.innerWidth)/2, grown=cw*1.24/2;
-      const cx=Math.max(-(half-grown-4),Math.min(half-grown-4,t*step));
-      c.classList.add('peek');
-      c.style.transform=`translate(${cx-cw/2}px,6px) rotate(0deg) scale(1.24)`;
-      c.style.zIndex=60;
-    }else{
-      c.classList.remove('peek');
-      c.style.transform=`translate(${x}px,${arc}px) rotate(${t*spread}deg)`;
-      c.style.zIndex=10+i;
-    }
-  });
+  if(window.innerWidth>=620){h.style.removeProperty('--cols');layoutTilt(cards);return;}
+  h.style.setProperty('--cols',Math.max(4,Math.min(6,Math.ceil(cards.length/2))));
+  cards.forEach(c=>{c.style.transform='';c.style.zIndex='';});
 }
 function renderHand(){
   const h=$('#hand'); h.innerHTML='';
@@ -1939,11 +1978,11 @@ function renderSpectator(){
 function toggleSel(i){
   if(!isMyTurn()||G.phase!=='turn'){selected=[];renderHand();return;}
   const k=selected.indexOf(i);
-  if(k>=0){selected.splice(k,1); if(PEEK===i)PEEK=null;}
+  if(k>=0){selected.splice(k,1);}
   else{
     selected.push(i);
-    PEEK=i;                                        // pull this one out of the fan
-    const c=CARDS[myHand()[i]];                    // …and spell it out above the hand
+    const c=CARDS[myHand()[i]];                    // spell the card out above the hand
+
     if(c)flash(c.name+' — '+c.desc);
   }
   renderHand();
@@ -2170,7 +2209,7 @@ function processEvents(evs){
       case 'dig':sPop();if(e.pid===VIEW)flash(`You fished out a ${CARDS[e.card].name}!`);break;
       case 'future':if(e.pid===VIEW&&(MODE!=='bots'||e.pid===0))showFuture(e.cards);break;
       case 'win':clearLocal();fxConfetti();sWin();setTimeout(()=>showWin(e.pid),900);break;
-      case 'turn':selected=[];PEEK=null;NUDGE=false;SPY=null;
+      case 'turn':selected=[];NUDGE=false;SPY=null;
         if(!HIDE_HAND){
           if(e.pid===VIEW)e.turnsLeft>1?sAttacked():sYourTurn();
           else sTheirTurn();
@@ -2211,7 +2250,11 @@ $('#btnQuit').onclick=()=>{
   modal(`<h2>Leave the game?</h2>
     <p class="mtext">Quitting already? How claw-ful.</p>
     ${online?'<p class="mtext" style="font-size:16px">The others will be told, and their game carries on without you.</p>':''}
-    <div class="mrow"><button class="btn boom" id="mYes">I'm feline done</button><button class="btn" id="mNo">Keep playing</button></div>`);
+    <!-- Colours on purpose (BUILD 24): leaving is the plain white button and
+         "Keep playing" is the big red one, so the eye lands on staying. A
+         cheerfully shameless dark pattern — nobody's ever quit a card game and
+         been glad about it. -->
+    <div class="mrow"><button class="btn" id="mYes">I'm feline done</button><button class="btn boom" id="mNo">Keep playing</button></div>`);
   $('#mYes').onclick=()=>{closeModal();clearLocal();if(online){OL.quit();}else{show('scr-title');}};
   $('#mNo').onclick=closeModal;
 };
@@ -2579,12 +2622,18 @@ function offerResume(){
 /* Sound / kitten-counter / reactions live on a floating rail on big screens,
    but move into the button row on phones — there is no edge free of chairs
    there. Called on boot and on every resize. */
+/* BUILD 24 — mute, the 💣 kitten counter and the 😹 reaction tray live on the
+   side rail on EVERY screen size now. Build 21 moved them into the row under
+   the hand on phones; that row got crowded and the emoji tray opened over the
+   cards, so they went back to the edge, just smaller (see the max-width:620px
+   CSS). relaxSeats() treats #sideRail as a no-go zone, so chairs move out of
+   its way rather than colliding with it. Kept as a function because the resize
+   handler and boot both call it, and because it re-homes the buttons if an
+   older layout ever left them in the button row. */
 function placeRail(){
-  const mobile=window.innerWidth<620;
-  const row=$('#handBtns'), rail=$('#sideRail');
-  const kids=[$('#btnMute'),$('#btnKittens'),$('#reactWrap')].filter(Boolean);
-  const target=mobile?row:rail;
-  kids.forEach(k=>{if(k.parentNode!==target)target.appendChild(k);});
+  const rail=$('#sideRail');
+  [$('#btnMute'),$('#btnKittens'),$('#reactWrap')].filter(Boolean)
+    .forEach(k=>{if(k.parentNode!==rail)rail.appendChild(k);});
 }
 
 let rzT=null;
@@ -2642,6 +2691,18 @@ const OL=(()=>{
     if(!r.ok)throw new Error('Database said no ('+r.status+'). Check the URL & that the database is in test mode.');
     return r.json();
   }
+  /* One REST call against the whole /kaboom namespace rather than a single
+     room. Only two things need this: the room-code collision check and the
+     stale-room sweep, both of which have to look OUTSIDE the room we're in.
+     Everything to do with actually playing goes through req() above, which is
+     locked to this room's node — which is why two games running at the same
+     time can never see each other. */
+  async function kreq(method,path,body,qs){
+    const r=await fetch(`${db}/kaboom${path}.json${qs||''}`,
+      {method,body:body===undefined?undefined:JSON.stringify(body)});
+    if(!r.ok)throw new Error('Database said no ('+r.status+').');
+    return r.json();
+  }
   const rnd=n=>Math.random().toString(36).slice(2,2+n);
 
   function err(msg){const e=$('#onlineErr');e.style.display='block';e.textContent=msg;}
@@ -2671,12 +2732,66 @@ const OL=(()=>{
     $('#onlineSetupPanel').style.display='';$('#lobbyPanel').style.display='none';clearErr();
     show('scr-online');
   };
+  /* ---------- room codes (BUILD 24) ----------
+     4 letters from a 23-character alphabet — I, L and O are left out so a code
+     can be read down the phone without ambiguity. That's 23^4 ≈ 280,000 codes.
+     Plenty, but "plenty" is not "never": creating a room is a PUT, which
+     REPLACES whatever is at that path, so two people landing on the same code
+     would silently flatten someone's live game. Cheap fix: ask whether the code
+     is taken before claiming it, and re-roll if it is. */
+  const newCode=()=>Array.from({length:4},()=>'ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
+  /* ?shallow=true asks Firebase for the KEYS at a path instead of the whole
+     subtree, so this costs a few bytes even when the room is mid-game. */
+  async function codeIsFree(c){
+    try{return !(await kreq('GET','/rooms/'+c,undefined,'?shallow=true'));}
+    catch(e){return true;}      // can't check? assume free — the PUT will report any real problem
+  }
+  /* ---------- stale-room sweep (BUILD 24) ----------
+     A room is deleted when its host quits properly, but a host who just closes
+     the tab leaves the node in the database forever. /kaboom/index holds
+     nothing but CODE -> creation time, so reading the whole thing costs a
+     fraction of a kilobyte; anything past its sell-by date has its room and its
+     index entry dropped. Runs in the background after a room is created and is
+     capped at SWEEP_MAX deletions, so it can never turn into a long job.
+     Deliberately conservative: a room with no index entry (made by an older
+     build, or by a client whose index write failed) is ADOPTED at "now" rather
+     than deleted, because a room created a second ago also has no entry yet and
+     nuking a live game would be unforgivable. It becomes sweepable STALE_MS
+     later like any other. */
+  const STALE_MS=12*60*60*1000, SWEEP_MAX=15;
+  async function sweepStaleRooms(){
+    try{
+      const idx=(await kreq('GET','/index'))||{};
+      const all=(await kreq('GET','/rooms',undefined,'?shallow=true'))||{};
+      const now=Date.now(), cut=now-STALE_MS;
+      const adopt={};
+      Object.keys(all).forEach(c=>{if(idx[c]===undefined)adopt[c]=now;});
+      if(Object.keys(adopt).length)await kreq('PATCH','/index',adopt);
+      let n=0;
+      for(const c of Object.keys(idx)){
+        if(c===code||n>=SWEEP_MAX)continue;         // never touch the room we're sitting in
+        const gone=all[c]===undefined;              // index entry with no room behind it
+        const stale=!(idx[c]>cut);                  // …or a room nobody has touched in hours
+        if(!gone&&!stale)continue;
+        n++;
+        if(!gone)await kreq('DELETE','/rooms/'+c).catch(()=>{});
+        await kreq('DELETE','/index/'+c).catch(()=>{});
+      }
+    }catch(e){/* pure housekeeping — never let it affect the game */}
+  }
   $('#btnCreateRoom').onclick=async()=>{
     clearErr();db=normDb();if(!db)return;
-    code=Array.from({length:4},()=>'ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random()*23)]).join('');
     try{
+      code=null;
+      for(let tries=0;tries<6&&!code;tries++){       // re-roll on the (very rare) collision
+        const c=newCode();
+        if(await codeIsFree(c))code=c;
+      }
+      if(!code){err('Couldn\'t find a free room code just now — give it another go.');return;}
       await req('PUT','',{createdAt:Date.now(),status:'lobby',players:{0:{name:myName()}}});
+      kreq('PATCH','/index',{[code]:Date.now()}).catch(()=>{});   // register it for the sweep
       myPid=0;isHost=true;enterLobby();
+      sweepStaleRooms();                            // tidy up behind everyone else, in the background
     }catch(e){err(friendly(e));}
   };
   $('#btnJoinRoom').onclick=async()=>{
@@ -3039,7 +3154,9 @@ const OL=(()=>{
   /* Tear down: stop listening, delete the room if we're the host, forget it. */
   function leave(){
     stopListen();
-    if(isHost&&db&&code)req('DELETE','').catch(()=>{});
+    /* The host owns the room, so the host's exit takes it away — and its index
+       entry with it, so the sweep isn't left chasing a room that's gone. */
+    if(isHost&&db&&code){req('DELETE','').catch(()=>{});kreq('DELETE','/index/'+code).catch(()=>{});}
     clearSession();
     if(hostTimer)clearTimeout(hostTimer);
     started=false;tree=null;G=null;MODE=null;chatPrimed=false;
