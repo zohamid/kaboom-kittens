@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "for file in src/*.js src/services/*.js test/*.test.js; do node --check \"$file\" || exit 1; done",
+    "check": "for file in src/*.js src/services/*.js src/ui/*.js test/*.test.js; do node --check \"$file\" || exit 1; done",
     "test": "node --test",
     "validate": "npm run check && npm test",
     "serve": "python3 -m http.server 8000"
