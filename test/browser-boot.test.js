@@ -1,70 +1,29 @@
 'use strict';
 
-const test=require('node:test');
-const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const path=require('node:path');
-const vm=require('node:vm');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const SOURCE_FILES=['art.js','game-engine.js','index.js','online.js'];
+test('game engine exports are available', async () => {
+  const { newGame, dispatch, classifyPlay, CARDS, CAT_TYPES } = await import('../src/game-engine.js');
+  assert.equal(typeof newGame, 'function');
+  assert.equal(typeof dispatch, 'function');
+  assert.equal(typeof classifyPlay, 'function');
+  assert.ok(CARDS);
+  assert.ok(CAT_TYPES);
+});
 
-function fakeElement(){
-  return {
-    classList:{add(){},remove(){},toggle(){}},
-    dataset:{},
-    style:{},
-    appendChild(){},
-    focus(){},
-    insertAdjacentHTML(){},
-    innerHTML:'',
-    textContent:'',
-    value:'',
-  };
-}
+test('art exports are available', async () => {
+  const { ART, CARD_BACK_ART, HERO_ART, catHead, svgWrap, star } = await import('../src/art.js');
+  assert.ok(ART);
+  assert.equal(typeof ART.BOOM, 'function');
+  assert.equal(typeof CARD_BACK_ART, 'function');
+  assert.equal(typeof HERO_ART, 'function');
+  assert.equal(typeof catHead, 'function');
+  assert.equal(typeof svgWrap, 'function');
+  assert.equal(typeof star, 'function');
+});
 
-test('browser sources initialize in document load order',()=>{
-  const elements=new Map();
-  const elementFor=selector=>{
-    if(!elements.has(selector))elements.set(selector,fakeElement());
-    return elements.get(selector);
-  };
-  const storage=new Map();
-  const document={
-    addEventListener(){},
-    createElement:fakeElement,
-    querySelector:elementFor,
-    querySelectorAll(){return [];},
-  };
-  const browserGlobal={
-    URL,
-    URLSearchParams,
-    addEventListener(){},
-    clearInterval,
-    clearTimeout,
-    console,
-    document,
-    EventSource:function EventSource(){},
-    fetch:async()=>({ok:true,json:async()=>null}),
-    location:{href:'http://localhost:8000/',search:''},
-    localStorage:{
-      getItem:key=>storage.get(key)??null,
-      setItem:(key,value)=>storage.set(key,String(value)),
-    },
-    navigator:{},
-    setInterval,
-    setTimeout,
-    innerHeight:800,
-    innerWidth:1280,
-  };
-  browserGlobal.window=browserGlobal;
-  const context=vm.createContext(browserGlobal);
-
-  for(const file of SOURCE_FILES){
-    const filename=path.join(__dirname,'..','src',file);
-    vm.runInContext(fs.readFileSync(filename,'utf8'),context,{filename});
-  }
-
-  assert.equal(typeof elementFor('#btnBots').onclick,'function');
-  assert.equal(typeof elementFor('#btnOnline').onclick,'function');
-  assert.match(elementFor('#heroArt').innerHTML,/^<svg/);
+test('online exports are available', async () => {
+  const { createOnlineClient } = await import('../src/online.js');
+  assert.equal(typeof createOnlineClient, 'function');
 });

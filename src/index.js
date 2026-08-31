@@ -1,5 +1,20 @@
 'use strict';
 
+import { CARDS, CAT_TYPES, CAT_TYPE_INDEX, newGame, dispatch, classifyPlay, playNeedsTarget } from './game-engine.js';
+import { ART, CARD_BACK_ART, HERO_ART, catHead, svgWrap } from './art.js';
+import { createOnlineClient } from './online.js';
+
+/**
+ * @typedef {'bots'|'hot'|'online'} GameMode
+ * @typedef {import('./game-engine.js').GameState} GameState
+ * @typedef {import('./game-engine.js').GameAction} GameAction
+ * @typedef {import('./game-engine.js').GameEvent} GameEvent
+ * @typedef {import('./game-engine.js').CardType} CardType
+ * @typedef {import('./game-engine.js').Player} Player
+ * @typedef {import('./game-engine.js').CardDef} CardDef
+ * @typedef {Record<CardType, CardDef>} CardsRecord
+ */
+
 /* ============================================================================
    UI LAYER — everything the player sees, hears and clicks.
 
@@ -16,10 +31,110 @@
    act() is the single entry point for a move: locally it calls the engine
    directly, online it hands the action to OL to route through the host.
    ============================================================================ */
+/**
+ * @type {GameMode|null}
+ */
+let MODE=null;
+/**
+ * @type {GameState|null}
+ */
+let G=null;
+/**
+ * @type {number}
+ */
+let VIEW=0;
+/**
+ * @type {boolean}
+ */
+let HIDE_HAND=false;
+/**
+ * @type {number[]}
+ */
+let selected=[];
+/**
+ * @type {boolean}
+ */
+let SND=true;
+/**
+ * @type {Record<number, {cards: CardType[], deckAt: number}>}
+ */
+let BOT_PEEK={};
+/**
+ * @type {number|null}
+ */
+let NOPE_TIMER=null;
+/**
+ * @type {boolean}
+ */
+let NUDGE=false;
 const $=q=>document.querySelector(q), $$=q=>[...document.querySelectorAll(q)];
-let MODE=null, G=null, VIEW=0, HIDE_HAND=false, selected=[], SND=true, BOT_PEEK={}, NOPE_TIMER=null, NUDGE=false;
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 SND = store.get('kk_snd')!=='0';
+
+/* ---------- online client ---------- */
+let onlineClient = null;
+
+function createOnlineClientInstance() {
+  if (onlineClient) return onlineClient;
+
+  const deps = {
+    document,
+    window,
+    fetch: window.fetch.bind(window),
+    EventSource: window.EventSource,
+    localStorage,
+    dispatch,
+    newGame,
+    CARDS,
+    ART,
+    NOPE_MS: 6000,
+    show,
+    modal,
+    closeModal,
+    closePhaseModal,
+    renderAll,
+    logMsg,
+    processEvents,
+    startNopeClock,
+    stopNopeClock,
+    npClockHTML: '<div class="npClock"><div class="bar"><i></i></div><div class="secs"></div></div>',
+    openInsertPicker,
+    cardHTML,
+    floatReaction,
+    addChatLine,
+    sChat: () => { tone(1320,.06,'sine',.1); tone(1760,.08,'sine',.08,.06); },
+    showChatUI,
+    getSnapshot: () => ({ G, MODE, VIEW }),
+    submitAction: (action) => {
+      if (MODE === 'online') {
+        onlineClient.send(action);
+      } else {
+        const ev = dispatchLocal(action);
+        if (ev) processEvents(ev);
+        afterChange();
+      }
+    },
+  };
+
+  onlineClient = createOnlineClient(deps);
+  return onlineClient;
+}
+
+/* Initialize online client after DOM is ready */
+function initOnlineClient() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', createOnlineClientInstance);
+  } else {
+    createOnlineClientInstance();
+  }
+}
+initOnlineClient();
+
+/* Helper to get online client, initializing if needed */
+function getOnlineClient() {
+  if (!onlineClient) createOnlineClientInstance();
+  return onlineClient;
+}
 
 /* ---------- tiny synth ---------- */
 /* Browsers create the AudioContext in a SUSPENDED state and only allow it to
@@ -370,6 +485,11 @@ function myHand(){return G.players[VIEW]?G.players[VIEW].hand:[];}
    the left. We only reorder the DISPLAY: the engine still addresses cards by
    their real index in the hand, so `selected` always stores real indices. */
 const SORT_RANK={DEFUSE:0,NOPE:1,ATTACK:2,SKIP:3,FAVOR:4,SHUFFLE:5,FUTURE:6};
+/** @type {Record<CardType, number>} */
+const BOT_PREF_MAP=Object.fromEntries(
+  ['CAT_SAMOSA','CAT_DISCO','CAT_PICKLE','CAT_MELON','CAT_TACHE','SHUFFLE','FAVOR','FUTURE','SKIP','ATTACK','NOPE','DEFUSE']
+    .map((t,i)=>[t,i])
+);
 let SORT_HAND=store.get('kk_sort')!=='0';
 /* Off by default: counting kittens is part of the game. The 💣 button on the
    side rail turns it on for anyone who'd rather see it. */
@@ -377,7 +497,7 @@ let SHOW_KITTENS=store.get('kk_bombs')==='1';
 function handOrder(){
   const h=myHand(), idx=h.map((_,i)=>i);
   if(!SORT_HAND)return idx;
-  const rank=t=>SORT_RANK[t]!==undefined?SORT_RANK[t]:10+CAT_TYPES.indexOf(t);
+  const rank=t=>SORT_RANK[t]!==undefined?SORT_RANK[t]:10+(CAT_TYPE_INDEX[t]??CAT_TYPES.length);
   return idx.sort((a,b)=>rank(h[a])-rank(h[b])||h[a].localeCompare(h[b])||a-b);
 }
 let SPY=null;   // which player a ghost is currently peeking at
@@ -671,7 +791,7 @@ function showWin(pid){
     <div class="mrow"><button class="btn big boom" id="mAgain">Play again</button><button class="btn" id="mHome">Menu</button></div>`);
   $('#mAgain').onclick=()=>{
     if(MODE==='online'){
-      const r=OL.restart();
+      const r=getOnlineClient().restart();
       if(r==='asked'){                              // guests wait for the host
         const b=$('#mAgain');b.disabled=true;b.textContent='Asked the host…';
       }else closeModal();
@@ -679,7 +799,7 @@ function showWin(pid){
     }
     closeModal();
     startLocalGame(G.players.map(p=>({name:p.name.replace(' 🤖','')+(p.bot?' 🤖':''),bot:p.bot})));};
-  $('#mHome').onclick=()=>{closeModal();if(MODE==='online')OL.leave();show('scr-title')};
+  $('#mHome').onclick=()=>{closeModal();if(MODE==='online')getOnlineClient().leave();show('scr-title')};
 }
 $('#btnQuit').onclick=()=>{
   const online=MODE==='online';
@@ -687,7 +807,7 @@ $('#btnQuit').onclick=()=>{
     <p class="mtext">Quitting already? How claw-ful.</p>
     ${online?'<p class="mtext" style="font-size:16px">The others will be told, and their game carries on without you.</p>':''}
     <div class="mrow"><button class="btn boom" id="mYes">I'm feline done</button><button class="btn" id="mNo">Keep playing</button></div>`);
-  $('#mYes').onclick=()=>{closeModal();clearLocal();if(online){OL.quit();}else{show('scr-title');}};
+  $('#mYes').onclick=()=>{closeModal();clearLocal();if(online){getOnlineClient().quit();}else{show('scr-title');}};
   $('#mNo').onclick=closeModal;
 };
 
@@ -698,7 +818,7 @@ let chatUnread=0;
 function setupChatUI(){
   const bar=$('#reactBar');
   bar.innerHTML=REACTS.map(r=>`<button data-r="${r}">${r}</button>`).join('');
-  $$('#reactBar button').forEach(b=>b.onclick=()=>{OL.react(b.dataset.r);bar.classList.remove('open');});
+  $$('#reactBar button').forEach(b=>b.onclick=()=>{getOnlineClient().react(b.dataset.r);bar.classList.remove('open');});
   $('#reactToggle').onclick=()=>{bar.classList.toggle('open');$('#reactToggle').classList.remove('hintme');};
   $('#btnKittens').onclick=()=>{
     SHOW_KITTENS=!SHOW_KITTENS;store.set('kk_bombs',SHOW_KITTENS?'1':'0');
@@ -727,7 +847,7 @@ function setupChatUI(){
 }
 function sendChat(){
   const i=$('#chatInput'), t=i.value.trim();
-  if(!t)return; i.value=''; OL.chat(t);
+  if(!t)return; i.value=''; getOnlineClient().chat(t);
 }
 function renderChatBadge(){
   const b=$('#btnChat'); if(!b)return;
@@ -799,7 +919,7 @@ function burstAt(r,col){
 
 /* ---------- local action routing ---------- */
 function act(action){
-  if(MODE==='online'){OL.send(action);return;}
+  if(MODE==='online'){getOnlineClient().send(action);return;}
   const ev=dispatchLocal(action);
   if(ev===null){renderHand();return;}
   processEvents(ev);
@@ -939,9 +1059,8 @@ function handleFavorPhase(){
   const {from,to}=G.pendingFavor, p=G.players[from];
   if(MODE==='bots'&&p.bot){
     setTimeout(()=>{
-      const pref=['CAT_SAMOSA','CAT_DISCO','CAT_PICKLE','CAT_MELON','CAT_TACHE','SHUFFLE','FAVOR','FUTURE','SKIP','ATTACK','NOPE','DEFUSE'];
       let idx=0,best=99;
-      p.hand.forEach((c,i)=>{const r=pref.indexOf(c);if(r<best){best=r;idx=i;}});
+      p.hand.forEach((c,i)=>{const r=BOT_PREF_MAP[c]??99;if(r<best){best=r;idx=i;}});
       const ev=dispatchLocal({a:'give',pid:from,idx});processEvents(ev);afterChange();
     },1100);return;
   }
@@ -1017,8 +1136,8 @@ function offerResume(){
     btn.style.display='';btn.textContent='Rejoin room '+room.code;
     btn.onclick=async()=>{
       btn.disabled=true;btn.textContent='Reconnecting…';
-      try{await OL.rejoin(room);}
-      catch(e){btn.disabled=false;btn.textContent='That room is gone';OL.clearSession();
+      try{await getOnlineClient().rejoin(room);}
+      catch(e){btn.disabled=false;btn.textContent='That room is gone';getOnlineClient().clearSession();
         setTimeout(()=>{btn.style.display='none';},1800);}
     };
     return;
@@ -1043,4 +1162,4 @@ window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(G
 setupChatUI();
 offerResume();
 /* Invite links are handled by the online layer, which loads after this file —
-   see OL.openInvite(). */
+   see getOnlineClient().openInvite(). */

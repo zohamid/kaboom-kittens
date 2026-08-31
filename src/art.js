@@ -1,16 +1,34 @@
 'use strict';
 
+/**
+ * @typedef {'happy'|'angry'|'scared'|'smug'|'plead'|'zen'} CatMood
+ */
+
 /* ================= ORIGINAL CARD ART (hand-drawn wobbly SVG) ================= */
-const INK='#2a211c';
+export const INK='#2a211c';
 /* Wrap raw SVG shapes in a scalable <svg>. Every illustration in the game is
    built from these helpers — there are no image files anywhere. */
-function svgWrap(inner,vb='0 0 100 100'){return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;}
+/**
+ * @param {string} inner
+ * @param {string} [vb='0 0 100 100']
+ * @returns {string}
+ */
+export function svgWrap(inner,vb='0 0 100 100'){return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" fill="none" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;}
 
 /* a wobbly cat head. cx,cy,r ; fill ; mood: happy|angry|scared|smug|plead|zen */
 /* The one cat face used everywhere, parameterised. cx,cy = centre, r = size,
    fill = fur colour, mood picks the eyes/mouth, extra = extra SVG on top
    (glasses, a mustache, a party hat…). */
-function catHead(cx,cy,r,fill,mood='happy',extra=''){
+/**
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} r
+ * @param {string} fill
+ * @param {CatMood} [mood='happy']
+ * @param {string} [extra='']
+ * @returns {string}
+ */
+export function catHead(cx,cy,r,fill,mood='happy',extra=''){
   const s=r/30, I=INK;
   const earL=`M${cx-24*s} ${cy-14*s} L${cx-30*s} ${cy-34*s} L${cx-10*s} ${cy-26*s}`;
   const earR=`M${cx+24*s} ${cy-14*s} L${cx+30*s} ${cy-34*s} L${cx+10*s} ${cy-26*s}`;
@@ -51,11 +69,23 @@ function catHead(cx,cy,r,fill,mood='happy',extra=''){
   <path d="M${cx+28*s} ${cy+4*s} L${cx+42*s} ${cy+1*s} M${cx+28*s} ${cy+9*s} L${cx+42*s} ${cy+10*s}" stroke="${I}" stroke-width="${2*s}"/>
   ${extra}`;
 }
-/* A wobbly N-point star, used for explosions and 'POW' bursts. */
-const star=(cx,cy,r,fill)=>{let p='';for(let i=0;i<10;i++){const a=Math.PI/5*i-Math.PI/2,rr=i%2?r*.45:r;p+=(i?'L':'M')+(cx+rr*Math.cos(a)).toFixed(1)+' '+(cy+rr*Math.sin(a)).toFixed(1)+' ';}return `<path d="${p}Z" fill="${fill}" stroke="${INK}" stroke-width="2.5"/>`;};
+
+/**
+ * @param {number} cx
+ * @param {number} cy
+ * @param {number} r
+ * @param {string} fill
+ * @returns {string}
+ */
+export const star=(cx,cy,r,fill)=>{let p='';for(let i=0;i<10;i++){const a=Math.PI/5*i-Math.PI/2,rr=i%2?r*.45:r;p+=(i?'L':'M')+(cx+rr*Math.cos(a)).toFixed(1)+' '+(cy+rr*Math.sin(a)).toFixed(1)+' ';}return `<path d="${p}Z" fill="${fill}" stroke="${INK}" stroke-width="2.5"/>`;};
+
+/**
+ * @typedef {() => string} ArtFn
+ */
 
 /* ART[type]() returns the artwork for a card type. Keys must match CARDS. */
-const ART={
+/** @type {Record<string, ArtFn>} */
+export const ART={
   BOOM: ()=>svgWrap(`
     ${star(50,54,46,'#ffc53d')}${star(50,54,34,'#ff5233')}
     <circle cx="50" cy="58" r="24" fill="#2a211c" stroke="#2a211c" stroke-width="3"/>
@@ -180,12 +210,12 @@ const ART={
       <path d="M63 51 L63 60" stroke="#2a211c" stroke-width="2.5"/>`)}
     <path d="M34 12 L44 20 L50 8 L56 20 L66 12 L62 26 L38 26 Z" fill="#ffc53d" stroke="#2a211c" stroke-width="3"/>`),
 };
-const CARD_BACK_ART=()=>svgWrap(`
+export const CARD_BACK_ART=()=>svgWrap(`
   <circle cx="50" cy="56" r="17" fill="#ffc53d"/>
   <ellipse cx="32" cy="34" rx="7" ry="9" fill="#ffc53d" transform="rotate(-16 32 34)"/>
   <ellipse cx="50" cy="28" rx="7" ry="9" fill="#ffc53d"/>
   <ellipse cx="68" cy="34" rx="7" ry="9" fill="#ffc53d" transform="rotate(16 68 34)"/>`);
-const HERO_ART=()=>svgWrap(`
+export const HERO_ART=()=>svgWrap(`
   ${star(50,52,48,'#ff5233')}${star(50,52,36,'#ffc53d')}
   ${catHead(50,54,26,'#fff6e8','scared')}
   <path d="M50 22 Q46 12 56 8" stroke="#2a211c" stroke-width="3.5"/>${star(58,6,7,'#ffc53d')}`,'0 0 100 100');

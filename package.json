@@ -1,6 +1,7 @@
 {
   "name": "kaboom-kittens",
   "private": true,
+  "type": "module",
   "scripts": {
     "check": "for file in src/*.js test/*.test.js; do node --check \"$file\" || exit 1; done",
     "test": "node --test",

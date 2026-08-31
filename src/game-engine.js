@@ -1,10 +1,23 @@
 'use strict';
 
-/* ================= CARD DEFINITIONS ================= */
-/* The card catalogue. `cat:1` marks a cat card (combo fodder, no power of its
-   own). color/tint drive the card frame; desc is shown on the card and in the
-   rules screen. Adding a cat here automatically adds it to the game. */
-const CARDS={
+/**
+ * @typedef {'BOOM'|'DEFUSE'|'ATTACK'|'SKIP'|'FAVOR'|'SHUFFLE'|'FUTURE'|'NOPE'|
+ *   'CAT_SAMOSA'|'CAT_DISCO'|'CAT_PICKLE'|'CAT_MELON'|'CAT_TACHE'|
+ *   'CAT_JALEBI'|'CAT_LUNGI'|'CAT_CHAI'|'CAT_RICKSHAW'|'CAT_UNCLE'} CardType
+ */
+
+/**
+ * @typedef {{
+ *   name: string,
+ *   color: string,
+ *   tint: string,
+ *   desc: string,
+ *   cat?: 1
+ * }} CardDef
+ */
+
+/** @type {Record<CardType, CardDef>} */
+export const CARDS={
   BOOM:   {name:'Kaboom Kitten', color:'#d63a1f', tint:'#ffd9cf', desc:'BOOM. You explode — unless you defuse it.'},
   DEFUSE: {name:'Defuse',        color:'#2f7d3f', tint:'#d9f0dd', desc:'Snip! Survive a Kaboom Kitten & hide it back in the deck.'},
   ATTACK: {name:'Attack',        color:'#6b4fb3', tint:'#e8e0f8', desc:'End your turn without drawing. Next player takes 2 turns.'},
@@ -25,12 +38,93 @@ const CARDS={
   CAT_UNCLE: {name:'Auto-Uncle Cat',cat:1,color:'#b06a10', tint:'#fdeed2', desc:'Meter down? Nahi jaayenge. Play matching cats as combos!'},
 };
 /* Every cat family that exists. Each game deals a random 5 of these. */
-const CAT_TYPES=Object.keys(CARDS).filter(k=>CARDS[k].cat);
-const MIN_PLAYERS=2;
-const MAX_PLAYERS=5;
-const ACTION_CARD_TYPES=new Set(['ATTACK','SKIP','FAVOR','SHUFFLE','FUTURE']);
-const TARGETED_PLAY_TYPES=new Set(['FAVOR','PAIR','TRIPLE']);
-const SUPPORTED_ACTIONS=new Set(['play','nope','closeNope','draw','defuse','insert','give','leave']);
+export const CAT_TYPES=Object.keys(CARDS).filter(k=>CARDS[k].cat);
+/** @type {Record<CardType, number>} */
+export const CAT_TYPE_INDEX=Object.fromEntries(CAT_TYPES.map((t,i)=>[t,i]));
+export const MIN_PLAYERS=2;
+export const MAX_PLAYERS=5;
+export const ACTION_CARD_TYPES=new Set(['ATTACK','SKIP','FAVOR','SHUFFLE','FUTURE']);
+export const TARGETED_PLAY_TYPES=new Set(['FAVOR','PAIR','TRIPLE']);
+export const SUPPORTED_ACTIONS=new Set(['play','nope','closeNope','draw','defuse','insert','give','leave']);
+
+/**
+ * @typedef {'turn'|'nope'|'defuse'|'insert'|'favorGive'|'over'} GamePhase
+ * @typedef {'play'|'nope'|'closeNope'|'draw'|'defuse'|'insert'|'give'|'leave'} ActionType
+ * @typedef {'BOOM'|'DEFUSE'|'ATTACK'|'SKIP'|'FAVOR'|'SHUFFLE'|'FUTURE'|'NOPE'|
+ *   'CAT_SAMOSA'|'CAT_DISCO'|'CAT_PICKLE'|'CAT_MELON'|'CAT_TACHE'|
+ *   'CAT_JALEBI'|'CAT_LUNGI'|'CAT_CHAI'|'CAT_RICKSHAW'|'CAT_UNCLE'} CardType
+ * @typedef {'ATTACK'|'SKIP'|'FAVOR'|'SHUFFLE'|'FUTURE'|'PAIR'|'TRIPLE'|'FIVE'|'NOPE'} PlayKind
+ *
+ * @typedef {{
+ *   id: number,
+ *   name: string,
+ *   bot: boolean,
+ *   alive: boolean,
+ *   hand: CardType[]
+ * }} Player
+ *
+ * @typedef {{
+ *   kind: PlayKind,
+ *   actor: number,
+ *   cards: CardType[],
+ *   target?: number,
+ *   named?: CardType,
+ *   wish?: CardType,
+ *   nopes: number[]
+ * }} PendingPlay
+ *
+ * @typedef {{
+ *   pid: number
+ * }} PendingBoom
+ *
+ * @typedef {{
+ *   from: number,
+ *   to: number
+ * }} PendingFavor
+ *
+ * @typedef {{
+ *   players: Player[],
+ *   cats: CardType[],
+ *   deck: CardType[],
+ *   discard: CardType[],
+ *   turn: number,
+ *   turnsLeft: number,
+ *   phase: GamePhase,
+ *   pending: PendingPlay|null,
+ *   pendingBoom: PendingBoom|null,
+ *   pendingFavor: PendingFavor|null,
+ *   winner: number|null,
+ *   seq: number,
+ *   ev: GameEvent[],
+ *   nopeUntil?: number
+ * }} GameState
+ *
+ * @typedef {{
+ *   a: ActionType,
+ *   pid?: number,
+ *   cards?: CardType[],
+ *   target?: number,
+ *   named?: CardType,
+ *   wish?: CardType,
+ *   use?: boolean,
+ *   pos?: number,
+ *   idx?: number
+ * }} GameAction
+ *
+ * @typedef {{
+ *   t: 'log'|'turn'|'play'|'nope'|'fizzle'|'draw'|'boomDrawn'|'inserted'|'defused'|'left'|'newround'|'exploded'|'shuffled'|'steal'|'give'|'dig'|'future'|'win'|'favorAsk',
+ *   msg?: string,
+ *   pid?: number|null,
+ *   kind?: string|null,
+ *   cards?: CardType[],
+ *   target?: number,
+ *   card?: CardType,
+ *   from?: number,
+ *   to?: number,
+ *   turnsLeft?: number
+ * }} GameEvent
+ */
+
 /* ============================================================================
    GAME ENGINE — pure rules. No DOM, no timers, no network.
 
@@ -51,12 +145,12 @@ const SUPPORTED_ACTIONS=new Set(['play','nope','closeNope','draw','defuse','inse
    nothing — this is what stops a desynced or malicious client corrupting a game.
    ============================================================================ */
 /* Fisher-Yates in place. Used for the deck and for picking cat families. */
-function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+export function shuffleArr(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
 /* Build a fresh game. Deck maths mirrors the real game: everyone gets 7 cards
    plus a guaranteed Defuse, then the remaining Defuses and exactly
    (players - 1) Kaboom Kittens go in, so exactly one player survives. */
-function newGame(playerDefs){
+export function newGame(playerDefs){
   if(!Array.isArray(playerDefs)||playerDefs.length<MIN_PLAYERS||playerDefs.length>MAX_PLAYERS){
     throw new RangeError(`A game requires between ${MIN_PLAYERS} and ${MAX_PLAYERS} players.`);
   }
@@ -77,23 +171,23 @@ function newGame(playerDefs){
   return {players,cats,deck:pool,discard:[],turn:0,turnsLeft:1,phase:'turn',pending:null,pendingBoom:null,pendingFavor:null,winner:null,seq:0,ev:[]};
 }
 /* Players still in the game. */
-const alivePlayers=G=>G.players.filter(p=>p.alive);
+export const alivePlayers=G=>G.players.filter(p=>p.alive);
 /* Whoever's turn it is. */
-const curP=G=>G.players[G.turn];
+export const curP=G=>G.players[G.turn];
 /* Queue an event for the UI to replay. */
-function emit(G,e){G.ev.push(e);}
+export function emit(G,e){G.ev.push(e);}
 /* Every log line carries the player it concerns, so the UI can colour-code it.
    kind:'turn' marks a turn change, which renders as a divider rather than a line. */
-function log(G,msg,pid,kind){emit(G,{t:'log',msg,pid:(pid==null?null:pid),kind:kind||null});}
+export function log(G,msg,pid,kind){emit(G,{t:'log',msg,pid:(pid==null?null:pid),kind:kind||null});}
 
 /* The next living player clockwise, skipping the dead. */
-function nextAliveIdx(G,from){
+export function nextAliveIdx(G,from){
   let i=from;
   for(let k=0;k<G.players.length;k++){i=(i+1)%G.players.length; if(G.players[i].alive)return i;}
   return from;
 }
 /* Move to the next player. forcedTurns is how Attack hands over 2+ turns. */
-function advance(G,forcedTurns){
+export function advance(G,forcedTurns){
   G.turn=nextAliveIdx(G,G.turn);
   G.turnsLeft=forcedTurns||1;
   G.phase='turn';
@@ -101,30 +195,37 @@ function advance(G,forcedTurns){
   log(G,`${G.players[G.turn].name}'s turn`,G.turn,'turn');
 }
 /* One turn is done: either take another (Attack stack) or pass the baton. */
-function endOneTurn(G){ // after a draw / skip / defuse-insert
+export function endOneTurn(G){ // after a draw / skip / defuse-insert
   G.turnsLeft--;
   if(G.turnsLeft>0){G.phase='turn'; emit(G,{t:'turn',pid:G.turn,turnsLeft:G.turnsLeft});}
   else advance(G);
 }
 /* One player left = game over. Returns true if it ended. */
-function checkWin(G){
+export function checkWin(G){
   const al=alivePlayers(G);
   if(al.length===1){G.phase='over'; G.winner=al[0].id; emit(G,{t:'win',pid:al[0].id}); log(G,`🏆 ${al[0].name} wins!`,al[0].id); return true;}
   return false;
 }
 /* Remove one of each listed card. Returns false and changes NOTHING if the
    player doesn't actually hold them — this is the anti-cheat check. */
-function removeFromHand(p,types){ // remove one instance of each listed type; return false if missing
-  const copy=[...p.hand];
-  for(const t of types){const i=copy.indexOf(t); if(i<0)return false; copy[i]=null;}
-  p.hand=copy.filter(c=>c!==null);
+export function removeFromHand(p,types){
+  const counts=new Map();
+  for(const t of types){counts.set(t,(counts.get(t)||0)+1);}
+  const newHand=[];
+  for(const card of p.hand){
+    const needed=counts.get(card);
+    if(needed&&needed>0){counts.set(card,needed-1);}
+    else{newHand.push(card);}
+  }
+  for(const [,count] of counts){if(count>0)return false;}
+  p.hand=newHand;
   return true;
 }
 
 /* classify a selection of card types into a legal play */
 /* Work out what a selection of cards means: a single action card, a cat pair,
    a cat triple, or five distinct cats. null = not a legal play. */
-function classifyPlay(types){
+export function classifyPlay(types){
   if(!Array.isArray(types))return null;
   if(types.length===1){
     const t=types[0];
@@ -139,12 +240,12 @@ function classifyPlay(types){
   return null;
 }
 /* These plays need a victim chosen before they can be submitted. */
-function playNeedsTarget(kind){return TARGETED_PLAY_TYPES.has(kind);}
+export function playNeedsTarget(kind){return TARGETED_PLAY_TYPES.has(kind);}
 
 /* THE heart of the game. Applies one action and returns the events it caused.
    Actions: play, nope, closeNope, draw, defuse, insert, give.
    Returns null if the action is illegal — callers must then change nothing. */
-function applyAction(G,a){
+export function applyAction(G,a){
   G.ev=[];
   const P=G.players[a.pid];
   switch(a.a){
@@ -332,7 +433,7 @@ function applyAction(G,a){
 
 /* Apply actions transactionally. Rejected input must not partially alter the
    authoritative state, especially when it originated from an online guest. */
-function dispatch(G,a){
+export function dispatch(G,a){
   if(!G||!Array.isArray(G.players)||!Array.isArray(G.deck)||!Array.isArray(G.discard)||!a||typeof a.a!=='string')return null;
   if(!SUPPORTED_ACTIONS.has(a.a))return null;
   if(a.a!=='closeNope'&&(!Number.isInteger(a.pid)||!G.players[a.pid]))return null;
@@ -340,8 +441,8 @@ function dispatch(G,a){
 
   let next,safeAction;
   try{
-    next=JSON.parse(JSON.stringify(G));
-    safeAction=JSON.parse(JSON.stringify(a));
+    next=structuredClone(G);
+    safeAction=structuredClone(a);
   }catch(error){
     return null;
   }
@@ -350,8 +451,4 @@ function dispatch(G,a){
   Object.keys(G).forEach(key=>delete G[key]);
   Object.assign(G,next);
   return G.ev;
-}
-
-if(typeof module!=='undefined'&&module.exports){
-  module.exports={CARDS,CAT_TYPES,MIN_PLAYERS,MAX_PLAYERS,newGame,dispatch,classifyPlay,playNeedsTarget,shuffleArr};
 }

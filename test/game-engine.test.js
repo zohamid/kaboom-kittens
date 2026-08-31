@@ -1,14 +1,14 @@
 'use strict';
 
-const test=require('node:test');
-const assert=require('node:assert/strict');
+import test from 'node:test';
+import assert from 'node:assert/strict';
 
-const {
+import {
   CAT_TYPES,
   classifyPlay,
   dispatch,
   newGame,
-}=require('../src/game-engine.js');
+} from '../src/game-engine.js';
 
 function gameWithHands(firstHand,secondHand){
   const game=newGame([{name:'Ada'},{name:'Grace'}]);
