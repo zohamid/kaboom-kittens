@@ -4,10 +4,27 @@
   KABOOM KITTENS — a fan-made card game of cats, luck and betrayal.
   © 2026 Zoha. Original art, names and code.
 
-  BUILD 15
+  BUILD 23
   Deliberately not shown on screen — check this line to confirm which version a
   browser is actually running. If a fix seems missing, the page is probably
   cached: hard-refresh (Ctrl/Cmd+Shift+R) and re-check this number.
+    23  final pass: cheat sheet refreshed, dead code removed, comments audited
+    22  hero artwork no longer clipped (the fuse spark sat above the frame);
+        title screen compacted so the rules line stays above the fold
+    21  reworded the title-screen rules line
+    20  the "How to play" line on the title screen is now permanent (was
+        first-visit only)
+    19  reaction palette: dropped the human scared face (redundant beside the
+        scared CAT) and added the heart-eyes cat with its own swoon sound
+    18  first-visit-only "read the rules" prompt on the title screen; gentle
+        per-card tilt on the desktop hand (no overlap, nothing hidden)
+    17  rules button now catches the eye (idle halo, hover lift, load/new-round
+        wiggle); mobile hand is an overlapping FAN — tap a card to pull it out
+        full size with its description (layoutFan / PEEK)
+    16  rules moved to a corner button (reachable mid-game); guest "start"
+        now NUDGES the host instead of dealing for them; copyright moved to
+        the bottom-left safe area; mobile hand shows every card at once as a
+        wrapped grid instead of a sideways swipe
     15  build label moved off-screen into these docs
     14  mobile card text made fully legible; self-correcting seat layout with a
         compact fallback for landscape/tiny screens; "Play again" fixed (a new
@@ -36,38 +53,57 @@
     G                          the whole game state (see the engine section)
     G.players                  every player: {id,name,bot,alive,hand[]}
     G.players[0].hand          one player's cards
-    G.deck                     draw pile; the LAST item is the top card
+    G.deck                     draw pile; the LAST item is the TOP card
     G.cats                     which 5 cat families were dealt this game
     G.phase                    'turn'|'nope'|'defuse'|'insert'|'favorGive'|'over'
     G.turn / G.turnsLeft       whose turn, and how many turns they owe
     MODE / VIEW                'bots'|'hot'|'online', and which seat is yours
+    PEEK / SPY / SORT_HAND     tapped card, spectated player, hand sorting
 
-    renderAll()                force a full redraw
+    renderAll()                force a full redraw (seats, piles, hand, banner)
     dispatch(G,{a:'draw',pid:0})       apply a move by hand (local games)
     act({a:'draw',pid:VIEW})           the same, routed correctly in any mode
     logMsg('hello',0)                  push a log line in player 0's colour
     floatReaction('Me','\u{1F639}',0)      fire a reaction animation
     playCardSound('CAT_CHAI')          audition any card's sound
-    openInsertPicker(20,p=>console.log(p))   open the hide-the-kitten UI
-    ac().state                 'running' means audio is unlocked; 'suspended'
-                               means no sound will play until you click once
+    REACT_SOUND['\u{1F63B}']()             audition a reaction's sound
+    openInsertPicker(20,p=>console.log(p))   the hide-the-kitten UI
+    relaxSeats() / layoutFan()         re-run the seat and hand layout solvers
+    ac().state                 'running' = audio unlocked; 'suspended' = no
+                               sound will play until the page is clicked once
 
-    localStorage.kk_room       saved ONLINE session (rejoin after reload)
-    localStorage.kk_local      saved LOCAL game snapshot
-    localStorage.kk_snd        '0' = muted     kk_sort '0' = unsorted hand
+    localStorage:
+      kk_room   saved ONLINE session (powers "Rejoin room")
+      kk_local  saved LOCAL game snapshot (powers "Resume your game")
+      kk_name   display name      kk_db    Firebase URL
+      kk_snd    '0' = muted       kk_sort  '0' = hand unsorted
+      kk_bombs  '1' = show kittens-left counter on the deck
     localStorage.clear()       forget everything and start fresh
 
   COMMON SYMPTOMS -> WHERE TO LOOK
     No sound at all ............ ac() is suspended; see unlockAudio()
     Online game won't start .... updateLobbyControls() / playerCountIn()
-    A guest sees stale state ... applyRemoteGame(): it ignores seq <= lastSeq
+    Game starts on its own ..... onTree(): a guest's startReq must only call
+                                 nudgeHost(), NEVER startGameAsHost()
+    "Play again" does nothing .. applyRemoteGame() compares `pub`, a counter
+                                 that never resets. Comparing G.seq instead
+                                 made a new round (seq 0) look older than the
+                                 finished game and get discarded
+    A guest sees stale state ... applyRemoteGame(): ignores pub <= lastPub
     Host ignores a guest move .. drainInbox() / hostApply(); dispatch() returns
                                  null for illegal moves and is silently dropped
+    Wrong player's cards ....... seats[] maps room ids to game seats; room ids
+                                 get gaps when somebody quits
     Modal vanishes instantly ... closePhaseModal(); info popups are tagged
                                  kind='info' so phase changes don't close them
     Log lines pile up .......... pumpLog() paces the queue; one line at a time
-    Cards look wrong after a
-    steal or sort .............. handOrder() reorders DISPLAY only; `selected`
+    Chairs overlap something ... relaxSeats() measures AFTER renderAll and
+                                 slides each chair along its spoke; add the
+                                 offending element to its `zones` list
+    Hand looks wrong on a phone  layoutFan() (arc + PEEK); desktop uses
+                                 layoutTilt(), which only rotates
+    Cards wrong after a steal
+    or a sort .................. handOrder() reorders DISPLAY only; `selected`
                                  always holds real indices into the hand
 
   ---------------------------------------------------------------------------
@@ -129,7 +165,7 @@ h1,h2,h3,.disp{font-family:var(--display); font-weight:400; letter-spacing:.04em
 .btn.small{font-size:16px; padding:6px 14px}
 
 /* ---------- title screen ---------- */
-#logo{margin:4vh 0 8px; text-align:center}
+#logo{margin:2.4vh 0 6px; text-align:center}
 #logo h1{
   font-size:clamp(46px,11vw,96px); margin:0; color:var(--sun);
   text-shadow: 3px 3px 0 var(--ink), 6px 6px 0 rgba(0,0,0,.3);
@@ -137,10 +173,31 @@ h1,h2,h3,.disp{font-family:var(--display); font-weight:400; letter-spacing:.04em
 }
 #logo h1 .ka{color:var(--boom)}
 #logo .tag{color:var(--paper); font-size:clamp(17px,2.6vw,22px); margin-top:2px; opacity:.92}
-#heroArt{width:min(320px,70vw); filter:drop-shadow(0 8px 0 rgba(0,0,0,.25)); margin:6px 0 10px; animation:bob 3.2s ease-in-out infinite}
+#heroArt{width:min(268px,58vw); filter:drop-shadow(0 8px 0 rgba(0,0,0,.25)); margin:6px 0 8px; overflow:visible; animation:bob 3.2s ease-in-out infinite}
 @keyframes bob{0%,100%{transform:translateY(0) rotate(-1.5deg)}50%{transform:translateY(-8px) rotate(1.5deg)}}
-.menu{display:flex; flex-direction:column; gap:14px; width:min(340px,88vw); margin-top:8px}
-.credit{margin-top:auto; padding-top:18px; color:var(--paper); opacity:.6; font-size:14px; text-align:center}
+.menu{display:flex; flex-direction:column; gap:11px; width:min(340px,88vw); margin-top:6px}
+#firstTime{
+  background:none; border:none; cursor:pointer; margin-top:2px; padding:4px 4px;
+  max-width:min(94vw,420px); line-height:1.3;      /* wraps tidily on a phone */
+  font-family:var(--hand); font-size:17px; color:var(--sun);
+  text-decoration:underline; text-underline-offset:4px; text-decoration-style:dashed;
+  text-shadow:0 2px 0 rgba(0,0,0,.4); transition:transform .12s, color .12s;
+}
+#firstTime:hover{transform:translateY(-1px); color:#fff}
+.credit{margin-top:auto; padding-top:10px; color:var(--paper); opacity:.6; font-size:14px; text-align:center}
+
+/* Shorter phones: shrink the title screen proportionally so the rules line at
+   the bottom of the menu still lands above the fold. */
+@media (max-height:790px){
+  #logo{margin:1.4vh 0 4px}
+  #logo h1{font-size:clamp(36px,9.5vw,70px)}
+  #logo .tag{font-size:clamp(15px,2.4vw,19px)}
+  #heroArt{width:min(196px,46vw); margin:2px 0 6px}
+  .menu{gap:9px; margin-top:4px}
+  .menu .btn.big{font-size:24px; padding:10px 22px}
+  #firstTime{font-size:15px; margin-top:0}
+  .credit{padding-top:6px; font-size:12.5px}
+}
 
 /* ---------- panels (setup / lobby / help) ---------- */
 .panel{
@@ -269,9 +326,10 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #discardPile .card:nth-last-child(3){transform:rotate(5deg)}
 
 #banner{
-  max-width:94%;
+  /* never run underneath the fixed rules button in the corner */
+  max-width:min(94%, calc(100vw - 150px));
   background:var(--ink); color:var(--paper); border-radius:999px; padding:6px 18px;
-  font-size:17px; text-align:center; box-shadow:0 3px 0 rgba(0,0,0,.3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-size:17px; text-align:center; box-shadow:0 3px 0 rgba(0,0,0,.3); white-space:normal; line-height:1.25;
 }
 #banner .disp{color:var(--sun)}
 #attackBadge{
@@ -305,8 +363,13 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   display:flex; justify-content:flex-start; align-items:flex-end; min-height:172px; max-width:100vw;
   padding:14px 18px 6px; overflow-x:auto; overflow-y:visible; scrollbar-width:thin;
 }
-#hand .card{flex:0 0 auto; margin-right:-34px; cursor:pointer; transition:transform .14s, margin .14s; transform-origin:bottom center}
-#hand .card:hover{transform:translateY(-14px) rotate(-1deg); z-index:30}
+/* Desktop keeps every card fully visible — nothing is hidden — but the row is
+   given a slight bow and per-card tilt (set in layoutTilt) so it reads as a
+   hand you're holding rather than a filing cabinet. Hovering straightens the
+   card upright and lifts it. */
+#hand .card{flex:0 0 auto; margin-right:-34px; cursor:pointer;
+  transition:transform .16s cubic-bezier(.2,.9,.3,1.2), margin .14s; transform-origin:bottom center}
+#hand .card:hover{transform:translateY(-16px) rotate(0deg) scale(1.04) !important; z-index:30}
 #hand .card:last-child{margin-right:0}
 /* A tapped card lifts and jumps above its neighbours, so it is never partly
    covered — important on phones where the hand is tightly packed. */
@@ -384,10 +447,26 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .futureFan .slot .lab{font-family:var(--display); font-size:14px; color:var(--ink-soft); margin-top:6px}
 
 @media (max-width:620px){
-  #sideRail{right:4px; top:34%; gap:7px}
-  .railBtn{width:34px; height:34px; font-size:16px}
-  .railBtn.big{width:42px; height:42px; font-size:21px}
-  #reactBar button{font-size:19px}
+  /* A phone has no free edge to float a rail on — it always lands on someone's
+     chair. So on mobile these controls join the button row under the hand,
+     where normal flow layout makes overlap impossible. (See placeRail().) */
+  #sideRail{display:none !important}
+  /* Keep the control row to ONE line — a second row pushed it off the bottom
+     of the screen on 740px-tall phones. */
+  #handBtns{position:relative; gap:7px; min-height:46px}
+  #handBtns .btn.big{font-size:19px; padding:9px 14px}
+  #handBtns .btn.small{font-size:14px; padding:5px 10px}
+  #btnHelp{width:44px; padding:3px 0 2px; top:8px; right:8px}
+  #btnHelp .q{font-size:20px}
+  #btnHelp .lbl{font-size:9px}
+  #handInfo{min-height:26px}
+  #handBtns .railBtn{width:32px; height:32px; font-size:15px}
+  #handBtns .railBtn.big{width:32px; height:32px; font-size:16px}
+  #handBtns #reactWrap{position:static}
+  #handBtns #reactBar{position:absolute; bottom:48px; right:4px; flex-direction:row; flex-wrap:wrap;
+    width:min(250px,74vw); justify-content:center; z-index:60}
+  .railHint{display:none}
+  #reactBar button{font-size:20px}
   /* Phones: a taller table, smaller piles and slimmer chairs, so seats can sit
      properly out on the rim instead of creeping in over the deck. */
   #feltOval,#seats{width:92%; height:78%}
@@ -401,16 +480,40 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   .seat .cards{font-size:10px}
   .seat{padding:3px 5px 2px; min-width:0}
   .turnpill{font-size:9.5px; padding:1px 6px; top:-19px; border-width:2px}
-  .card{width:106px; height:162px}
-  .card .cname{font-size:12px}
-  .card .cdesc{font-size:10.5px; line-height:1.18; min-height:46px}
-  .card .art svg{max-height:52px}
-  /* On a phone the cards barely overlap — you can read every one by scrolling
-     the hand sideways instead of squinting at slivers. */
-  #hand .card{margin-right:-10px}
-  #hand{padding:14px 12px 6px}
+  /* Exactly four to a row on any phone width: the card sizes itself to a
+     quarter of the hand rather than to a fixed pixel width, so 8 cards always
+     land in two tidy rows with nothing cut off. */
+  .card{width:104px; height:150px}
+  .card .cname{font-size:11px; padding:3px 2px 1px; line-height:1.02}
+  .card .cdesc{display:none}          /* shown in full above the hand on tap */
+  .card .art{padding:1px}
+  .card .art svg{max-height:78px}
+  /* selection is shown by the ring; the lift is handled by the fan maths */
+  #hand .card.sel{box-shadow:0 0 0 4px var(--sun), var(--shadow)}
+  /* the tapped-card readout has to carry the text the cards no longer show */
+  #handInfo{font-size:15px; line-height:1.25; max-width:96vw; white-space:normal; min-height:34px}
+  /* ---------- the hand on a phone: a real fan ----------
+     Cards overlap the way they do in your actual hand, splayed on an arc, so
+     the whole hand is on screen at once however many cards you hold. Tapping
+     one pulls it out of the fan at full size with its description — see
+     layoutFan() and PEEK in the UI layer. Cards are absolutely positioned, so
+     the fan's spacing is computed in JS from the real measured width. */
+  /* Tall enough that the enlarged peek card stays INSIDE the hand area instead
+     of riding up over the log line above it. */
+  #hand{position:relative; display:block; overflow:visible;
+    height:232px; min-height:232px; max-height:none; padding:4px 4px 0}
+  #hand .card{position:absolute; left:50%; top:6px; margin:0;
+    transform-origin:50% 88%; will-change:transform;
+    transition:transform .2s cubic-bezier(.2,.9,.3,1.2), box-shadow .2s}
+  #hand .card .cdesc{display:none}
+  /* the tapped card leaves the fan: upright, larger, and readable */
+  #hand .card.peek{z-index:60 !important; transform-origin:50% 50%;
+    box-shadow:0 0 0 4px var(--sun), 0 10px 0 rgba(20,12,8,.35)}
+  #hand .card.peek .cdesc{display:block; font-size:11px; line-height:1.2; min-height:0}
+  #hand .card.peek .cname{font-size:13px}
+  #hand .card.peek .art svg{max-height:70px}
   .pile{width:96px; height:136px}
-  #tableMid{min-height:clamp(310px,46vh,410px)}
+  #tableMid{min-height:clamp(258px,35vh,340px)}
 }
 /* ---------- deck strip (hide the kitten) ---------- */
 .deckStrip{display:flex; align-items:center; overflow-x:auto; padding:14px 6px 10px; gap:0; background:var(--paper-dim); border:3px solid var(--ink); border-radius:14px; margin:10px 0}
@@ -425,6 +528,44 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 /* ---------- chat & reactions ---------- */
 /* Side rail: sound, table options and reactions — parked at the right edge,
    clear of the felt so nothing ever covers the cards. */
+/* The rules button: top-right corner, always reachable, never in the way. */
+#btnHelp{
+  position:fixed; top:10px; right:10px; z-index:59; display:flex; flex-direction:column; align-items:center;
+  gap:1px; width:52px; padding:5px 0 3px; cursor:pointer;
+  background:var(--paper); border:3px solid var(--ink); border-radius:16px 18px 15px 17px;
+  box-shadow:0 4px 0 rgba(20,12,8,.35); transition:transform .12s;
+}
+/* Idle: a slow halo every few seconds — enough to catch the eye, not enough to
+   nag. Hover: it leans in, turns gold and the "?" grows. `pop` is a short
+   attention burst fired when the page loads and when a game starts. */
+#btnHelp{animation:helpBreathe 5s ease-in-out infinite}
+#btnHelp:hover,#btnHelp:focus-visible{
+  transform:translateY(-3px) scale(1.09) rotate(-5deg); background:var(--sun); outline:none;
+  box-shadow:0 6px 0 rgba(20,12,8,.35), 0 0 0 6px rgba(255,197,61,.35);
+}
+#btnHelp:hover .q{transform:scale(1.18) rotate(4deg)}
+#btnHelp:hover .lbl{color:var(--ink)}
+#btnHelp:active{transform:translateY(2px) scale(1.02)}
+#btnHelp .q{font-family:var(--display); font-size:24px; line-height:.95; color:var(--boom-dk);
+  transition:transform .15s}
+#btnHelp .lbl{font-family:var(--display); font-size:10px; letter-spacing:.09em; color:var(--ink-soft);
+  transition:color .15s}
+#btnHelp.pop{animation:helpPop 1.1s ease-in-out 3}
+@keyframes helpBreathe{
+  0%,86%,100%{box-shadow:0 4px 0 rgba(20,12,8,.35), 0 0 0 0 rgba(255,197,61,0)}
+  93%{box-shadow:0 4px 0 rgba(20,12,8,.35), 0 0 0 9px rgba(255,197,61,.32)}
+}
+@keyframes helpPop{
+  0%,100%{transform:rotate(0) scale(1)}
+  20%{transform:rotate(-9deg) scale(1.12)}
+  55%{transform:rotate(8deg) scale(1.12)}
+  80%{transform:rotate(-3deg) scale(1.04)}
+}
+#scr-help.on ~ #btnHelp,
+body.helping #btnHelp{display:none}
+/* The Start button pulses when a guest nudges the host. */
+.btn.nudge{animation:nudgeGlow 1.15s ease-in-out infinite}
+
 #sideRail{position:fixed; right:9px; top:38%; transform:translateY(-38%); z-index:58;
   display:none; flex-direction:column; align-items:center; gap:9px}
 .railBtn{font-size:19px; line-height:1; width:40px; height:40px; border-radius:50%;
@@ -508,12 +649,18 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   18%{transform:scale(1.06) rotate(2deg);opacity:1}
   30%{transform:scale(1) rotate(0)}
   80%{opacity:1}100%{transform:scale(1.04);opacity:0}}
-#pawmark{position:fixed; right:8px; bottom:5px; z-index:55; font-size:11.5px; color:var(--paper); opacity:.55;
+/* Bottom-LEFT and inside the safe area: the right edge is where phones put the
+   home indicator and where our own side rail lives, which was clipping it. */
+#pawmark{position:fixed; left:calc(9px + env(safe-area-inset-left)); right:auto;
+  bottom:calc(5px + env(safe-area-inset-bottom)); z-index:55;
+  font-size:11.5px; color:var(--paper); opacity:.55;
   font-family:var(--hand); pointer-events:none; text-shadow:0 1px 0 rgba(0,0,0,.45);
-  max-width:52vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  max-width:60vw; white-space:nowrap}
 /* ---------- compact layout ----------
    Landscape handsets and very narrow phones: no oval, players in a row above
    the piles. Everything is laid out by flexbox, so overlap is impossible. */
+/* Narrowest phones: a slightly smaller card keeps the whole fan on screen. */
+@media (max-width:344px){ .card{width:92px; height:134px} }
 @media (max-height:520px),(max-width:339px){
   #tableMid{display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
     gap:6px; min-height:0; padding-top:2px}
@@ -529,11 +676,15 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   .turnPointer{display:none}
   .pile{width:62px; height:88px}
   .pile .plabel{font-size:10px; top:-15px}
-  .card{width:92px; height:146px}
-  #hand{min-height:150px; padding:8px 10px 4px}
-  #hand .card{margin-right:-16px}
   #logbar{min-height:26px; font-size:14px}
   .credit{display:none}
+}
+/* Landscape only: there is no vertical room for a wrapped hand, so keep the
+   single overlapping row here. (A narrow PORTRAIT phone still gets the grid.) */
+@media (max-height:520px){
+  .card{width:92px; height:146px}
+  #hand{display:flex; flex-wrap:nowrap; overflow-x:auto; max-height:none; min-height:150px; padding:8px 10px 4px}
+  #hand .card{margin-right:-16px; width:92px; height:146px; aspect-ratio:auto}
 }
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -554,7 +705,9 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
       <button class="btn big sun" id="btnHotseat">Pass &amp; Play</button>
       <button class="btn big sky" id="btnOnline">Play Online</button>
       <button class="btn big leaf" id="btnResume" style="display:none">Rejoin your game</button>
-      <button class="btn ghost" id="btnHelp">How to Play</button>
+      <!-- Always shown. People scan the middle of the screen, not the corners,
+           so the rules get a permanent seat in the menu's line of sight. -->
+      <button id="firstTime">New here, or just want a refresher on the rules? →</button>
     </div>
     <div class="credit">Made by Zoha 😺 — a fan who wanted all the kaboom with none of the cards. Original art &amp; code.</div>
   </div>
@@ -743,6 +896,10 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
     <p id="curtainText"></p>
     <button class="btn big sun" id="curtainBtn">I'm ready!</button>
   </div>
+
+  <!-- Rules live in their own corner, reachable from anywhere — including
+       mid-game, which is when people actually need them. -->
+  <button id="btnHelp" title="How to play"><span class="q">?</span><span class="lbl">rules</span></button>
 
   <!-- Everything that isn't the game itself lives out here on the right edge. -->
   <div id="sideRail">
@@ -956,7 +1113,12 @@ const CARD_BACK_ART=()=>svgWrap(`
 const HERO_ART=()=>svgWrap(`
   ${star(50,52,48,'#ff5233')}${star(50,52,36,'#ffc53d')}
   ${catHead(50,54,26,'#fff6e8','scared')}
-  <path d="M50 22 Q46 12 56 8" stroke="#2a211c" stroke-width="3.5"/>${star(58,6,7,'#ffc53d')}`,'0 0 100 100');
+  <path d="M50 22 Q46 12 56 8" stroke="#2a211c" stroke-width="3.5"/>${star(58,6,7,'#ffc53d')}`,
+  /* The spark on the fuse is drawn at y=6 with radius 7, i.e. it pokes ABOVE
+     y=0 — with a plain "0 0 100 100" box its top point was sliced off. The box
+     is opened up on every side so nothing is clipped, which also nudges the
+     whole cat down a touch inside its frame. */
+  '-4 -10 108 114');
 
 /* ================= CARD DEFINITIONS ================= */
 /* The card catalogue. `cat:1` marks a cat card (combo fodder, no power of its
@@ -1341,7 +1503,10 @@ function noise(dur,vol,type,freq,when=0,q=1){
   const g=c.createGain(); g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(.001,t+dur);
   src.connect(f); f.connect(g); g.connect(c.destination); src.start(t); src.stop(t+dur);
 }
-const melody=(notes,step=.11,type='triangle',vol=.15,dur=.13)=>notes.forEach((f,i)=>{if(f)tone(f,dur,type,vol,i*step);});
+/* A run of notes. `when` delays the whole phrase, so a sound can be built from
+   several phrases in sequence (see the heart-eyes reaction). */
+const melody=(notes,step=.11,type='triangle',vol=.15,dur=.13,when=0)=>
+  notes.forEach((f,i)=>{if(f)tone(f,dur,type,vol,when+i*step);});
 const N={C:523,D:587,E:659,F:698,G:784,A:880,B:988,C2:1047,G_:392,E_:330,A_:440};
 
 /* every card gets its own silly voice */
@@ -1379,7 +1544,6 @@ const sDeal=()=>{for(let i=0;i<7;i++)noise(.05,.16,'bandpass',1200+i*90,i*.07,3)
 const sYourTurn=()=>{tone(660,.1,'sine',.13);tone(880,.15,'sine',.13,.1);tone(1180,.18,'sine',.1,.22);};
 const sTheirTurn=()=>tone(430,.09,'sine',.06);
 const sAttacked=()=>{tone(160,.14,'sawtooth',.26,0,-60);tone(120,.2,'sawtooth',.24,.13,-40);noise(.22,.2,'lowpass',700,.02);};
-const sJoin=()=>{tone(523,.1,'triangle',.13);tone(784,.14,'triangle',.13,.1);};
 const sChat=()=>{tone(1320,.06,'sine',.1);tone(1760,.08,'sine',.08,.06);};
 const sLose=()=>{[440,392,330,262].forEach((f,i)=>tone(f,.22,'triangle',.16,i*.16));};
 const sSteal=()=>{tone(880,.07,'triangle',.13,0,-260);tone(1180,.06,'triangle',.11,.07);noise(.08,.1,'highpass',4000,.02);};
@@ -1387,14 +1551,28 @@ function playCardSound(t){const f=CARD_SOUND[t];if(f)f();else sPop();}
 
 /* ---------- screens ---------- */
 /* Switch screens. Exactly one .screen carries .on at a time. */
+/* Wiggle the rules button to draw the eye. Safe to call any time. */
+function popHelp(){
+  const b=$('#btnHelp'); if(!b)return;
+  b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop');
+  setTimeout(()=>b.classList.remove('pop'),3600);
+}
+let CUR='scr-title';
 function show(id){
   $$('.screen').forEach(s=>s.classList.remove('on'));$('#'+id).classList.add('on');
+  CUR=id;
   $('#sideRail').style.display=(id==='scr-table')?'flex':'none';   // rail only at the table
+  document.body.classList.toggle('helping',id==='scr-help');       // hides the ? button
 }
 $('#heroArt').innerHTML=HERO_ART();
 $('#curtainArt').innerHTML=svgWrap(catHead(50,54,30,'#ffc53d','happy'));
 $$('.backBtn').forEach(b=>b.onclick=()=>{show('scr-title')});
-$('#btnHelp').onclick=()=>{renderHelp();show('scr-help')};
+/* Rules can be opened from anywhere, so Back has to return you to wherever you
+   were — opening them mid-game must not throw you out of the game. */
+let helpFrom='scr-title';
+$('#firstTime').onclick=()=>{sPop();helpFrom='scr-title';renderHelp();show('scr-help');};
+$('#btnHelp').onclick=()=>{helpFrom=CUR==='scr-help'?helpFrom:CUR;renderHelp();show('scr-help')};
+$('#scr-help .backBtn').onclick=()=>show(helpFrom);
 $('#btnMute').onclick=()=>{SND=!SND;store.set('kk_snd',SND?'1':'0');$('#btnMute').textContent=SND?'🔊':'🔇';
 };
 $('#btnMute').textContent=SND?'🔊':'🔇';
@@ -1454,7 +1632,7 @@ function startLocalGame(defs){
   G=newGame(defs); BOT_PEEK={}; selected=[]; HIDE_HAND=false;
   showChatUI(false);
   show('scr-table');
-  announce('NEW ROUND!');sDeal();
+  announce('NEW ROUND!');sDeal();popHelp();
   dealAnimation(()=>logMsg('Cards dealt. Good luck! 🐱'));
   setTimeout(()=>logMsg('Today\'s cats: '+G.cats.map(c=>CARDS[c].name).join(', ')),2200);
   renderAll();
@@ -1500,7 +1678,7 @@ function renderAll(){
      height of the table, which moves every chair. Measuring before they are
      drawn solves yesterday's layout. */
   relaxSeats();
-  requestAnimationFrame(relaxSeats);          // again once the browser has settled
+  requestAnimationFrame(()=>{relaxSeats();layoutFan();});   // once the browser has settled
 }
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* Everyone gets a chair around the oval — you always sit at the bottom. */
@@ -1547,6 +1725,19 @@ function renderOpps(){
     }
   });
 }
+/* Desktop: a couple of degrees of rotation per card and a shallow bow. Purely
+   cosmetic — the cards keep their normal spacing, so every name, illustration
+   and description stays readable at a glance. Hover overrides this in CSS. */
+function layoutTilt(cards){
+  const n=cards.length;
+  cards.forEach((c,i)=>{
+    const t=n>1?(i-(n-1)/2):0;
+    const spread=Math.min(2.0,12/Math.max(n,1));       // degrees per card — subtle on purpose
+    c.style.transform=`translateY(${Math.abs(t)*1.6}px) rotate(${t*spread}deg)`;
+    c.style.zIndex=10+i;
+  });
+}
+
 /* Position one chair from the angle + radii stored on it (dA nudges it around
    the ring, which buys the solver room on cramped screens). */
 function placeSeat(el){
@@ -1567,7 +1758,7 @@ function relaxSeats(){
   const hit=(a,b)=>!(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom);
   const area=(a,b)=>Math.max(0,Math.min(a.right,b.right)-Math.max(a.left,b.left))*
                     Math.max(0,Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
-  const zones=['#centerPiles','.plabel','#topbar','#logbar','#handWrap']
+  const zones=['#centerPiles','.plabel','#topbar','#logbar','#handWrap','#sideRail','#btnHelp']
     .flatMap(sel=>[...document.querySelectorAll(sel)])
     .map(e=>e.getBoundingClientRect())
     .filter(r=>r.width&&r.height);
@@ -1587,7 +1778,7 @@ function relaxSeats(){
     if(r.right>W-2)c+=(r.right-(W-2))*400;
     return c;
   };
-  const RAD=[0,3,6,9,12,15,18,-3,-6,-9];         // slide along the spoke
+  const RAD=[0,3,6,9,12,15,18,21,-3,-6,-9,-12];  // slide along the spoke
   const ANG=[0,.14,-.14,.28,-.28,.42,-.42];       // …and shuffle round the ring
   [...document.querySelectorAll('#seats .seat')].forEach(el=>{
     const rx0=+el.dataset.rx, ry0=+el.dataset.ry;
@@ -1610,8 +1801,20 @@ function relaxSeats(){
       placeSeat(el);
       return bestCost;
     };
+    /* Try at full size, then try shrunk, and KEEP WHICHEVER IS BETTER — the
+       earlier version threw away the smaller chair unless it was a perfect fix,
+       which left a few pixels of overlap on cramped phones. */
     el.classList.remove('tight');
-    if(search()>0){ el.classList.add('tight'); if(search()>0)el.classList.remove('tight'); }
+    const normal=search();
+    if(normal>0){
+      const keep={rx:el.dataset.rx,ry:el.dataset.ry,da:el.dataset.da};
+      el.classList.add('tight');
+      if(search()>=normal){                        // shrinking didn't help: undo it
+        el.classList.remove('tight');
+        el.dataset.rx=keep.rx;el.dataset.ry=keep.ry;el.dataset.da=keep.da;
+        placeSeat(el);
+      }
+    }
   });
 }
 /* Draw and discard piles, plus the deck counter and attack badge. */
@@ -1655,7 +1858,43 @@ function handOrder(){
   const rank=t=>SORT_RANK[t]!==undefined?SORT_RANK[t]:10+CAT_TYPES.indexOf(t);
   return idx.sort((a,b)=>rank(h[a])-rank(h[b])||h[a].localeCompare(h[b])||a-b);
 }
-let SPY=null;   // which player a ghost is currently peeking at
+let PEEK=null;  // index of the card pulled out of the fan for a proper look
+/* ---------- the phone fan ----------
+   Lays the hand out as an overlapping arc. Everything is measured live: the
+   step between cards shrinks as the hand grows, so 3 cards or 13 cards both
+   fit the width without scrolling. The peeked card leaves the arc entirely —
+   upright, bigger, on top, with its description showing. */
+function layoutFan(){
+  const h=$('#hand'); if(!h)return;
+  const cards=[...h.querySelectorAll('.card')];
+  if(window.innerWidth>=620){layoutTilt(cards);return;} // desktop gets a tilt instead
+  if(!cards.length)return;
+  const cw=cards[0].offsetWidth||104;
+  const avail=(h.clientWidth||window.innerWidth)-10;
+  const n=cards.length;
+  /* how far apart the cards sit; never wider than a card, never so tight that
+     the artwork disappears */
+  const step=n>1?Math.max(26,Math.min(cw*0.92,(avail-cw)/(n-1))):0;
+  const spread=n>1?Math.min(4.5,26/n):0;                // degrees per card
+  cards.forEach((c,i)=>{
+    const t=i-(n-1)/2;
+    const x=t*step-cw/2;
+    const arc=Math.abs(t)*(spread*0.9);                 // slight bow, like a real hand
+    if(+c.dataset.i===PEEK){
+      /* Nudge the enlarged card inwards if it would hang off the edge — at the
+         ends of the fan on a narrow phone it otherwise overflows. */
+      const half=(h.clientWidth||window.innerWidth)/2, grown=cw*1.24/2;
+      const cx=Math.max(-(half-grown-4),Math.min(half-grown-4,t*step));
+      c.classList.add('peek');
+      c.style.transform=`translate(${cx-cw/2}px,6px) rotate(0deg) scale(1.24)`;
+      c.style.zIndex=60;
+    }else{
+      c.classList.remove('peek');
+      c.style.transform=`translate(${x}px,${arc}px) rotate(${t*spread}deg)`;
+      c.style.zIndex=10+i;
+    }
+  });
+}
 function renderHand(){
   const h=$('#hand'); h.innerHTML='';
   const ghost=G&&G.players[VIEW]&&!G.players[VIEW].alive;
@@ -1669,8 +1908,10 @@ function renderHand(){
     const t=myHand()[i];
     h.insertAdjacentHTML('beforeend',cardHTML(t,selected.includes(i)?'sel':''));
     const el=h.lastElementChild;
+    el.dataset.i=i;                      // the fan needs to know which card is which
     el.onclick=()=>{toggleSel(i)};
   });
+  layoutFan();
   updateHandButtons();
 }
 /* Once you've exploded you get the run of the table: pick any player and see
@@ -1691,17 +1932,19 @@ function renderSpectator(){
   const h=$('#hand');
   const sp=G.players[SPY];
   $('#handInfo').innerHTML='👻 <b>Spectating</b> — you can see everyone\'s cards now';
-  sp.hand.forEach(t=>h.insertAdjacentHTML('beforeend',cardHTML(t,'spy')));
+  sp.hand.forEach((t,i)=>{h.insertAdjacentHTML('beforeend',cardHTML(t,'spy'));h.lastElementChild.dataset.i=i;});
+  layoutFan();
   if(!sp.hand.length)h.innerHTML='<div style="color:var(--paper);opacity:.8">empty hand</div>';
 }
 function toggleSel(i){
   if(!isMyTurn()||G.phase!=='turn'){selected=[];renderHand();return;}
   const k=selected.indexOf(i);
-  if(k>=0)selected.splice(k,1);
+  if(k>=0){selected.splice(k,1); if(PEEK===i)PEEK=null;}
   else{
     selected.push(i);
-    const c=CARDS[myHand()[i]];                    // spell the card out in full —
-    if(c)flash(c.name+' — '+c.desc);               // guarantees legibility on a phone
+    PEEK=i;                                        // pull this one out of the fan
+    const c=CARDS[myHand()[i]];                    // …and spell it out above the hand
+    if(c)flash(c.name+' — '+c.desc);
   }
   renderHand();
 }
@@ -1711,7 +1954,10 @@ function updateHandButtons(){
   const mine=isMyTurn()&&G.phase==='turn';
   draw.style.display=mine?'':'none';
   draw.classList.toggle('nudge',mine&&NUDGE);
-  draw.textContent=mine&&NUDGE?'Draw to end your turn 👇':'Draw & end turn';
+  /* Short labels on narrow phones keep the whole control row on one line. */
+  const tight=window.innerWidth<430;
+  draw.textContent=mine&&NUDGE?(tight?'Draw 👇':'Draw to end your turn 👇')
+                              :(tight?'Draw':'Draw & end turn');
   draw.onclick=()=>act({a:'draw',pid:VIEW});
   const types=selected.map(i=>myHand()[i]);
   const cls=types.length?classifyPlay(types):null;
@@ -1731,10 +1977,14 @@ function renderBanner(msg){
   if(G.phase==='nope'){b.innerHTML=`⏳ Waiting for Nopes…`;return;}
   if(G.phase==='favorGive'){b.innerHTML=`${G.players[G.pendingFavor.from].name} is choosing a card to give…`;return;}
   if(G.phase==='defuse'||G.phase==='insert'){b.innerHTML=`💣 <span class="disp">${G.players[G.pendingBoom.pid].name}</span> drew a Kaboom Kitten!`;return;}
+  /* Phones get terse copy: a three-line banner pushes the buttons off-screen. */
+  const terse=window.innerWidth<430;
   if(isMyTurn())b.innerHTML=NUDGE
-    ? `<span class="disp" style="color:var(--sun)">Now draw a card</span> to finish your turn 👇`
-    : `<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span> Play cards or draw to end your turn.`;
-  else b.innerHTML=`<span class="disp">${cp.name}</span> is ${cp.bot?'plotting…':'playing…'}`;
+    ? (terse?`<span class="disp" style="color:var(--sun)">Draw a card</span> 👇`
+           : `<span class="disp" style="color:var(--sun)">Now draw a card</span> to finish your turn 👇`)
+    : (terse?`<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span>`
+           : `<span class="disp">Your turn${G.turnsLeft>1?' ×'+G.turnsLeft:''}!</span> Play cards or draw to end your turn.`);
+  else b.innerHTML=`<span class="disp">${esc(cp.name)}</span> is ${cp.bot?'plotting…':'playing…'}`;
 }
 /* Messages queue up and take turns — several events often land in the same
    instant. Each line is tagged with its player's colour so you can tell at a
@@ -1920,7 +2170,7 @@ function processEvents(evs){
       case 'dig':sPop();if(e.pid===VIEW)flash(`You fished out a ${CARDS[e.card].name}!`);break;
       case 'future':if(e.pid===VIEW&&(MODE!=='bots'||e.pid===0))showFuture(e.cards);break;
       case 'win':clearLocal();fxConfetti();sWin();setTimeout(()=>showWin(e.pid),900);break;
-      case 'turn':selected=[];NUDGE=false;SPY=null;
+      case 'turn':selected=[];PEEK=null;NUDGE=false;SPY=null;
         if(!HIDE_HAND){
           if(e.pid===VIEW)e.turnsLeft>1?sAttacked():sYourTurn();
           else sTheirTurn();
@@ -1967,7 +2217,7 @@ $('#btnQuit').onclick=()=>{
 };
 
 /* ---------- chat & reactions ---------- */
-const REACTS=['😹','😱','😾','👏','🔥','💣','🙀','😼'];
+const REACTS=['😹','😻','😾','👏','🔥','💣','🙀','😼'];
 let chatUnread=0;
 /* Wire the chat panel, the reaction rail and the hand-sort toggle. */
 function setupChatUI(){
@@ -2026,16 +2276,31 @@ function addChatLine(name,text,mine){
   while(log.children.length>80)log.removeChild(log.firstChild);
   if(!$('#chatPanel').classList.contains('on')){chatUnread++;renderChatBadge();}
 }
-/* Each emoji has its own voice, so you can hear who reacted with what. */
+/* ---------- one voice per reaction ----------
+   Deliberately spread across different TIMBRES and SHAPES, not just pitches,
+   so you can tell who sent what without looking:
+     giggle   bright square melody      swoon    sine arpeggio + twinkle
+     hiss     low sawtooth + noise      applause three sharp noise claps
+     crackle  random pops over a hiss   fuse     falling whistle + thud
+     shock    rising inhale + squeak    purr     low tremolo + a "mrrp"
+   Keys are written as escapes so the emoji survive any editor. */
 const REACT_SOUND={
-  '\u{1F639}':()=>melody([N.E,N.G,N.E,N.C2],.07,'square',.12,.08),
-  '\u{1F631}':()=>{tone(880,.35,'sine',.16,0,-560);noise(.2,.12,'highpass',2200,.05);},
-  '\u{1F63E}':()=>{tone(150,.26,'sawtooth',.2,0,-50);noise(.22,.13,'lowpass',500,0);},
-  '\u{1F44F}':()=>[0,.11,.22].forEach(t=>noise(.06,.3,'bandpass',1900,t,1.4)),
-  '\u{1F525}':()=>noise(.45,.22,'highpass',3400,0),
-  '\u{1F4A3}':()=>{tone(700,.5,'sine',.1,0,-620);noise(.12,.3,'lowpass',300,.5);},
-  '\u{1F640}':()=>{tone(520,.14,'triangle',.16);tone(760,.2,'triangle',.16,.12);},
-  '\u{1F63C}':()=>{tone(330,.12,'sine',.13,0,180);tone(500,.16,'sine',.11,.12,120);},
+  '\u{1F639}':()=>[0,.1,.2,.3].forEach((t,i)=>                              // 😹 "heh-heh-heh"
+                   tone(720-i*55,.07,'square',.13,t)),                     //    a real chuckle
+  '\u{1F63B}':()=>{tone(150,.1,'sine',.22,0);tone(150,.12,'sine',.18,.16);  // 😻 two heartbeats…
+                   melody([N.E,N.G,N.C2],.1,'sine',.12,.18,.3);            //    …a swoon…
+                   tone(2100,.45,'sine',.05,.56);},                        //    …and a twinkle
+  '\u{1F63E}':()=>{tone(150,.26,'sawtooth',.2,0,-50);                        // 😾 hiss
+                   noise(.22,.13,'lowpass',500,0);},
+  '\u{1F44F}':()=>[0,.11,.22].forEach(t=>noise(.06,.3,'bandpass',1900,t,1.4)),// 👏 applause
+  '\u{1F525}':()=>{noise(.5,.13,'highpass',2600,0);                          // 🔥 crackle
+                   for(let i=0;i<7;i++)noise(.03,.22,'bandpass',2600+Math.random()*2600,Math.random()*.42,5);},
+  '\u{1F4A3}':()=>{tone(700,.5,'sine',.1,0,-620);                            // 💣 falling fuse
+                   noise(.14,.34,'lowpass',260,.5);},                          //    …then the thud
+  '\u{1F640}':()=>{noise(.2,.2,'highpass',900,0,1.2);                        // 🙀 sharp inhale
+                   tone(760,.16,'triangle',.15,.16,520);},                     //    …and a squeak
+  '\u{1F63C}':()=>{for(let i=0;i<6;i++)tone(112,.075,'sawtooth',.16,i*.085);  // 😼 purr
+                   tone(300,.16,'sine',.12,.55,240);},                         //    …and a "mrrp"
 };
 function floatReaction(name,emo,pid){
   const col=pid!=null?pColor(pid):'#ffc53d';
@@ -2311,12 +2576,27 @@ function offerResume(){
   btn.style.display='none';
 }
 
+/* Sound / kitten-counter / reactions live on a floating rail on big screens,
+   but move into the button row on phones — there is no edge free of chairs
+   there. Called on boot and on every resize. */
+function placeRail(){
+  const mobile=window.innerWidth<620;
+  const row=$('#handBtns'), rail=$('#sideRail');
+  const kids=[$('#btnMute'),$('#btnKittens'),$('#reactWrap')].filter(Boolean);
+  const target=mobile?row:rail;
+  kids.forEach(k=>{if(k.parentNode!==target)target.appendChild(k);});
+}
+
 let rzT=null;
-window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{if(G)renderOpps();},180);});
+window.addEventListener('resize',()=>{clearTimeout(rzT);rzT=setTimeout(()=>{placeRail();if(G)renderAll();layoutFan();},180);});
 
 /* boot the chat / reaction controls once the DOM is in place */
 setupChatUI();
+placeRail();
 offerResume();
+/* A short burst on load, and again when a game begins, so the rules button is
+   noticed without nagging during play. */
+popHelp();
 /* Invite links are handled by the online layer, which loads after this file —
    see OL.openInvite(). */
 /* ============================================================================
@@ -2440,17 +2720,35 @@ const OL=(()=>{
      A guest can ask, which just nudges the host's device. */
   $('#btnStartOnline').onclick=async()=>{
     if(!isHost){
-      setLobbyMsg('Asked the host to deal — waiting…');
-      req('PATCH','',{startReq:Date.now()}).catch(()=>setLobbyMsg("Couldn't reach the room — check your connection.",1));
+      setLobbyMsg('Nudged the host — waiting for them to deal…',0,true);
+      /* We send WHO is asking so the host sees a human name, not a timestamp. */
+      req('PATCH','',{startReq:{n:myName(),t:Date.now()}})
+        .catch(()=>setLobbyMsg("Couldn't reach the room — check your connection.",1));
       return;
     }
     let ps=playerCountIn(tree);
     if(ps<2){try{const fresh=await req('GET','');if(fresh){tree=fresh;onTree();ps=playerCountIn(tree);}}catch(e){}}
     if(ps<2){setLobbyMsg('You need at least one more player before you can deal.',1);return;}
+    $('#btnStartOnline').classList.remove('nudge');
     startGameAsHost();
   };
-  function setLobbyMsg(t,warn){
+  /* Make the host's Start button impossible to miss for a few seconds. */
+  let nudgeT=null;
+  function nudgeHost(who){
+    const b=$('#btnStartOnline');
+    b.classList.add('nudge');
+    setLobbyMsg('👋 '+who+" is ready and waiting — deal when you're set!",0,true);
+    sYourTurn();
+    clearTimeout(nudgeT);
+    nudgeT=setTimeout(()=>b.classList.remove('nudge'),6000);
+  }
+  /* `hold` pins a message for a few seconds so the routine lobby status text
+     (which re-renders on every room update) can't wipe out a nudge. */
+  let msgHold=0;
+  function setLobbyMsg(t,warn,hold){
+    if(!hold&&Date.now()<msgHold)return;
     const w=$('#lobbyWait');w.style.display='';w.style.color=warn?'var(--boom-dk)':'var(--ink-soft)';w.textContent=t;
+    if(hold)msgHold=Date.now()+6000;
   }
   function updateLobbyControls(n){
     const b=$('#btnStartOnline');
@@ -2541,7 +2839,16 @@ const OL=(()=>{
       if(tree.status==='playing'&&tree.game){applyRemoteGame();if(G){MODE='online';VIEW=myPid;startedNow();}return;}
       drainChat();
       const n=playerCountIn(tree);
-      if(isHost&&tree.startReq&&n>=2){startGameAsHost();return;}
+      /* A guest asking to start must NEVER deal the cards for the host — that
+         made the game appear to begin on its own. It only raises a nudge; the
+         host still decides. We clear the flag as soon as it is shown so a
+         second tap can nudge again. */
+      if(isHost&&tree.startReq&&n>=2){
+        const who=(tree.startReq&&tree.startReq.n)||'Someone';
+        tree.startReq=null;
+        req('PATCH','',{startReq:null}).catch(()=>{});
+        nudgeHost(who);
+      }
       updateLobbyControls(n);
       return;
     }
