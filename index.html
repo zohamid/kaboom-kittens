@@ -4,11 +4,33 @@
   KABOOM KITTENS — a fan-made card game of cats, luck and betrayal.
   © 2026 Zoha. Original art, names and code.
 
-  BUILD 24
+  BUILD 27
   Deliberately not shown on screen — check this line to confirm which version a
   browser is actually running. If a fix seems missing, the page is probably
   cached: hard-refresh (Ctrl/Cmd+Shift+R) and re-check this number.
-    24  mobile hand back to a four-per-row grid (the build-22 fan was fiddly to
+    27  the phone finally FEELS right. Picking a card no longer rebuilds the row
+        (syncSelection), so the lift, ring and badge animate instead of snapping;
+        a tapped card overshoots and settles, and the count badge bounces when
+        it changes. Every :hover style is now gated on a real pointer — on a
+        touch screen :hover stuck to whatever you tapped last, and on the cards
+        it was !important, so it was overriding the picked-card lift entirely.
+        Also: swiping the hand can no longer trigger the browser's back gesture,
+        and the hide-the-kitten gaps are thumb-sized
+    26  the hand STACKS duplicates: identical cards draw as one card with a ×N
+        badge, so a typical 8-card hand is 4-5 cards on screen without hiding a
+        word. Tap a stack once for one copy, twice for a pair, three times for a
+        trio, again to clear — see handStacks() / toggleStack(). Also: DRAW and
+        DISCARD labels now clear the bobbing deck, the deck card fills its pile
+        instead of overhanging it, and the Play button gets short labels on
+        narrow phones so the control row stays on one line
+    25  mobile hand reverted to ONE swipeable row carrying the full card face —
+        name, artwork and description, same as the desktop. Builds 22-24 both
+        chased "every card on screen at once" and both paid for it by hiding the
+        description, which is the thing that makes a card usable. Also: the line
+        above the hand is now a persistent readout (what you have picked, or a
+        hint) instead of a message that timed out after 3.2s and then rebuilt
+        the whole hand; picking a card scrolls it into view
+    24  mobile hand to a four-per-row grid (the build-22 fan was fiddly to
         tap); side rail returns to the edge on phones so the button row under
         the hand carries only Play / Draw / sort / chat / Quit; room codes are
         checked for collisions before being claimed and abandoned rooms are
@@ -75,6 +97,11 @@
     REACT_SOUND['\u{1F63B}']()             audition a reaction's sound
     openInsertPicker(20,p=>console.log(p))   the hide-the-kitten UI
     relaxSeats() / layoutFan()         re-run the seat and hand layout solvers
+    handStacks()                       the hand grouped into stacks + real indices
+    toggleStack('NOPE')                tap a stack (cycles 0 -> 1 -> 2 -> … -> 0)
+    syncSelection()                    repaint the picked state WITHOUT a rebuild
+    updateHandInfo()                   redraw the readout above the hand
+    revealCard(3)                      scroll the hand to centre card 3
     ac().state                 'running' = audio unlocked; 'suspended' = no
                                sound will play until the page is clicked once
 
@@ -110,10 +137,27 @@
     Chairs overlap something ... relaxSeats() measures AFTER renderAll and
                                  slides each chair along its spoke; add the
                                  offending element to its `zones` list
-    Hand looks wrong on a phone  it is pure CSS — the four-per-row grid in the
-                                 max-width:620px block. layoutFan() only clears
-                                 stale inline transforms there; desktop uses
-                                 layoutTilt(), which just rotates each card
+    Hand looks wrong on a phone  it is pure CSS — the single swipeable row in
+                                 the max-width:620px block. layoutFan() only
+                                 clears stale inline transforms there; desktop
+                                 uses layoutTilt(), which just rotates each card
+    Wrong number of cards shown  the hand STACKS duplicates — handStacks()
+                                 groups by type and keeps the real hand indices
+                                 behind each stack; `selected` still holds real
+                                 indices, so nothing downstream sees stacks
+    Tapping a card feels dead .. something rebuilt #hand, so the transition had
+                                 no start state — selection must go through
+                                 syncSelection(), never renderHand(). Check too
+                                 that no :hover rule escaped the (hover:hover)
+                                 gate: on touch it sticks, and on .card it is
+                                 !important, which beats the lift AND the pop
+    Card text missing on a phone the mobile block must NOT hide .cdesc; only
+                                 the landscape (max-height:520px) block does,
+                                 where there is genuinely no room for it
+    Line above the hand is stale updateHandInfo() owns it at rest and flash()
+                                 borrows it for 3.2s. flash() must hand it BACK
+                                 (it used to call renderHand() instead, which
+                                 left the old sentence on screen for good)
     Rail buttons in the wrong
     place ...................... placeRail() re-homes mute / 💣 / 😹 into
                                  #sideRail; the row under the hand keeps only
@@ -333,12 +377,20 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 #tableMid{flex:1; display:flex; align-items:center; justify-content:center; gap:clamp(18px,6vw,64px); width:100%; position:relative; min-height:190px}
 .pile{position:relative; width:118px; height:165px; flex:0 0 auto}
 .pile .stackghost{position:absolute; inset:0; border-radius:12px; background:var(--felt-dk); border:3px solid rgba(0,0,0,.25)}
+/* BUILD 25 — the deck's face-down card fills its pile rather than carrying the
+   hand's card size. The two are set in different media queries, so whenever
+   they disagreed the card overhung the pile and rode up over the DRAW / DISCARD
+   label above it. Now the pile is the single source of truth for the size. */
+.pile > .card{position:absolute; inset:0; width:100%; height:100%}
 .pile .count{
   display:inline-block; background:var(--ink); color:var(--sun); font-family:var(--display); font-size:13px;
   letter-spacing:.04em; border-radius:999px; padding:1px 9px; margin-left:5px; white-space:nowrap; opacity:1;
 }
 /* Kept tight to the pile: any float upward eats into the ring the chairs sit on. */
-.pile .plabel{position:absolute; top:-20px; width:max-content; left:50%; transform:translateX(-50%);
+/* Clearance matters here: when it's your turn the deck bobs up 6px (pulseDeck),
+   so the label has to sit its own height PLUS that bob above the pile, or the
+   rising card clips the DRAW / DISCARD text. */
+.pile .plabel{position:absolute; top:-26px; width:max-content; left:50%; transform:translateX(-50%);
   text-align:center; color:var(--paper); font-family:var(--display); letter-spacing:.06em; font-size:13px; opacity:.9}
 #deckPile .card{position:absolute; inset:0; cursor:pointer}
 #deckPile.mydraw .card.back{animation:pulseDeck 1.4s ease-in-out infinite}
@@ -391,7 +443,13 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
    card upright and lifts it. */
 #hand .card{flex:0 0 auto; margin-right:-34px; cursor:pointer;
   transition:transform .16s cubic-bezier(.2,.9,.3,1.2), margin .14s; transform-origin:bottom center}
-#hand .card:hover{transform:translateY(-16px) rotate(0deg) scale(1.04) !important; z-index:30}
+/* BUILD 27 — gated on a real pointer. On a touch screen :hover STICKS after a
+   tap, and because this rule is !important it beat both the picked-card lift
+   and the tap animation: you tapped a card and it just sat there. Phones now
+   never match this rule at all. */
+@media (hover:hover){
+  #hand .card:hover{transform:translateY(-16px) rotate(0deg) scale(1.04) !important; z-index:30}
+}
 #hand .card:last-child{margin-right:0}
 /* A tapped card lifts and jumps above its neighbours, so it is never partly
    covered — important on phones where the hand is tightly packed. */
@@ -414,6 +472,24 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
 .card .art svg{width:100%; height:100%; max-height:74px}
 .card .cdesc{flex:0 0 auto; font-size:10.5px; line-height:1.16; text-align:center; padding:2px 4px 5px;
   color:var(--ink-soft); min-height:40px}
+/* ---------- the ×N stack badge (BUILD 26) ----------
+   Sits INSIDE the card's rounded corner, because .card clips its overflow —
+   hung outside it would simply be cut off. Gold while the stack is untouched
+   ("you hold 3 of these"), red once you have picked some ("2 of 3 chosen"), so
+   a glance tells you where you are in a combo. */
+.card .stackn{
+  position:absolute; top:3px; right:3px; z-index:6; pointer-events:none;
+  font-family:var(--display); font-size:12px; line-height:1; letter-spacing:.02em;
+  padding:3px 7px; color:var(--ink); background:var(--sun);
+  border:2.5px solid var(--ink); border-radius:999px; box-shadow:0 2px 0 rgba(20,12,8,.35);
+}
+.card .stackn.picked{background:var(--boom); color:#fff}
+/* The badge bounces whenever its number changes, so counting up through a combo
+   registers even when you are looking at the artwork rather than the corner. */
+.card .stackn.bump{animation:badgeBump .32s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes badgeBump{0%{transform:scale(1)}45%{transform:scale(1.35) rotate(-7deg)}100%{transform:scale(1)}}
+/* Give the name room to dodge the badge, but only on the cards that have one. */
+.card:has(.stackn) .cname{padding-right:30px}
 .card.back{background:var(--ink)}
 .card.back .inner{border-color:var(--sun); background:repeating-linear-gradient(45deg, #33261f 0 12px, #2a211c 12px 24px); align-items:center; justify-content:center}
 .card.back .backpaw{font-family:var(--display); color:var(--sun); font-size:19px; transform:rotate(-14deg); letter-spacing:.05em; text-align:center; line-height:1}
@@ -506,58 +582,81 @@ hr.scribble{border:none; border-top:3px dashed var(--ink-soft); opacity:.5; marg
   #feltOval{border-width:6px}
   #centerPiles{gap:12px}
   .pile{width:70px; height:100px}
-  .pile .plabel{font-size:10.5px; top:-16px; letter-spacing:.03em}
+  .pile .plabel{font-size:10.5px; top:-24px; letter-spacing:.03em}
   .pile .count{font-size:11px; padding:1px 7px; margin-left:4px}
   .seat .avatar{width:26px; height:26px}
   .seat .nm{font-size:11.5px; max-width:58px}
   .seat .cards{font-size:10px}
   .seat{padding:3px 5px 2px; min-width:0}
   .turnpill{font-size:9.5px; padding:1px 6px; top:-19px; border-width:2px}
-  .card{width:104px; height:150px}
-  .card .cname{font-size:11px; padding:3px 2px 1px; line-height:1.02}
-  .card .cdesc{display:none}          /* shown in full above the hand on tap */
+  /* ---------- cards on a phone (BUILD 25) ----------
+     The SAME card face as the desktop — name, artwork AND description — just a
+     size down. Builds 22-24 hid the description and leaned on a readout above
+     the hand instead; that made every card need a second tap before you knew
+     what it did, and the readout was easy to miss. Nothing is hidden now. */
+  .card{width:112px; height:162px}
+  .card .cname{font-size:12px; padding:4px 3px 2px; line-height:1.05}
+  .card .cdesc{font-size:10px; line-height:1.16; padding:2px 3px 5px; min-height:38px}
   .card .art{padding:1px}
-  .card .art svg{max-height:70px}
-  /* the tapped-card readout has to carry the text the cards no longer show */
+  .card .art svg{max-height:60px}
   #handInfo{font-size:15px; line-height:1.25; max-width:96vw; white-space:normal; min-height:34px}
-  /* ---------- the hand on a phone: four to a row (BUILD 24) ----------
-     The build-22 arc/fan is gone. Overlapping cards were awkward to hit with a
-     thumb, and the tapped card growing out of the arc fought with everything
-     around it. Back to the layout that worked: a plain wrapped grid, four cards
-     to a row, so a full 8-card hand is two tidy rows with every card completely
-     visible and independently tappable. There is no JS positioning here at all —
-     flex-wrap does the whole job, and layoutFan() simply strips any leftover
-     inline transform on mobile. */
-  /* width:100% matters more than it looks: #handWrap centres its children, so
-     without it #hand shrinks to fit its contents — and the cards below size
-     themselves as a PERCENTAGE of #hand, which makes that circular and
-     collapses them to a thumbnail. Pin the width and the percentages resolve. */
-  #hand{position:static; width:100%; display:flex; flex-wrap:wrap; justify-content:center;
-    align-content:flex-start; gap:5px 4px; height:auto; min-height:0; max-height:none;
-    overflow:visible; padding:4px 2px 0}
-  /* One column-width of the row, whatever the screen width, so the row always
-     divides exactly with nothing cut off. --cols is 4 for a normal 8-card hand
-     and rises as the hand grows (set in layoutFan), which keeps a big hand to
-     two rows by making the cards narrower rather than by adding rows forever.
-     The dvh cap shrinks the cards on a short phone so the hand plus the table
-     still fit above the fold; the plain px value on the line before it is the
-     fallback for browsers without dvh. */
+  /* ---------- the hand on a phone: one row you swipe (BUILD 25) ----------
+     Back to the original, and on purpose. The two attempts at fitting every
+     card on screen at once both cost more than they bought:
+
+       build 22  an overlapping arc. Needed JS to measure and position every
+                 card, and the tapped card had to grow back out of the arc to be
+                 readable. Fiddly to hit, and it glitched.
+       build 24  a wrapped grid. Fitted, but only by shrinking cards until the
+                 description had to go, so the cards stopped explaining
+                 themselves — the thing that actually makes them usable.
+
+     A single row you swipe keeps every card at a readable size with its full
+     text, which is what a card is FOR. You trade "see all eight at once" for
+     "understand the one you're looking at", and on a phone that is the better
+     trade. Cards are spaced, not overlapped, so nothing is ever half-hidden,
+     and scroll-snap stops the row drifting to rest mid-card. */
+  #hand{position:static; width:100%; display:flex; flex-wrap:nowrap;
+    justify-content:flex-start; align-items:flex-end; gap:8px;
+    height:auto; min-height:0; max-height:none;
+    overflow-x:auto; overflow-y:visible; padding:12px 14px 10px;
+    scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch;
+    scroll-padding:0 14px}
   /* position:relative, NOT static — .card is the containing block for its
      absolutely-positioned .inner, and making it static silently stretches the
      card's whole face to the size of the viewport (blank white cards). */
-  #hand .card{position:relative; flex:0 0 auto; margin:0;
-    width:calc(100% / var(--cols,4) - 4px); height:auto; aspect-ratio:104/150;
-    max-width:100px;
-    max-width:min(100px,13.5dvh);
-    transform:none; transition:box-shadow .14s}
-  /* No hover lift and no selection lift: in a grid a raised card would cover
-     its neighbours, and the gold ring already says which cards are picked. */
-  #hand .card:hover{transform:none !important}
-  #hand .card.sel{transform:none; box-shadow:0 0 0 4px var(--sun), var(--shadow)}
-  /* The name shrinks a point for every extra column, so a long one like
-     "Rickshaw Cat" still fits a narrow card instead of being clipped mid-word:
-     11px at 4 columns, 10px at 5, 9px at 6. */
-  #hand .card .cname{font-size:calc(11px - (var(--cols,4) - 4) * 1px)}
+  #hand .card{position:relative; flex:0 0 auto; margin:0; max-width:none;
+    height:162px; aspect-ratio:auto; scroll-snap-align:center;
+    transition:transform .16s cubic-bezier(.2,.9,.3,1.2), box-shadow .14s}
+  /* No hover lift on a phone — there is no hover, and :hover sticks after a tap
+     on touch browsers, leaving a card stranded in the air. */
+  /* ---------- picking a card, on a phone (BUILD 27) ----------
+     A picked card rises and grows a little, and keeps a gold ring. The lift is
+     what your eye reads first; the ring is what survives a glance at a hand
+     where two cards are picked. Both transition now instead of snapping,
+     because syncSelection() stopped rebuilding the row on every tap. */
+  #hand .card.sel{transform:translateY(-14px) scale(1.03); z-index:31;
+    box-shadow:0 0 0 4px var(--sun), 0 12px 0 rgba(20,12,8,.32)}
+  /* One-shot overshoot on the tap itself. It starts from the card's RESTING
+     position and finishes exactly on the picked position, so the transition
+     picks it up afterwards with nothing to jump over. */
+  #hand .card.pop{animation:cardPop .34s cubic-bezier(.2,.9,.3,1.35)}
+  @keyframes cardPop{
+    0%{transform:translateY(0) scale(1)}
+    55%{transform:translateY(-22px) scale(1.09)}
+    100%{transform:translateY(-14px) scale(1.03)}
+  }
+  /* Swiping the hand must not turn into the browser's back-navigation gesture
+     when you reach the end of the row — that was the single jankiest thing
+     about the phone layout. */
+  #hand{overscroll-behavior-x:contain}
+  /* Both edges of the scroll viewport fade out, so a half-visible card at the
+     rim reads as "the row continues" rather than as a card that got cut off.
+     Done with a mask rather than an overlay element: a mask applies to the
+     element's own box, so it stays put while the cards scroll underneath, and
+     it cannot stray over the buttons below. */
+  #hand{-webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 26px),transparent 100%);
+        mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 26px),transparent 100%)}
   .pile{width:96px; height:136px}
   #tableMid{min-height:clamp(258px,35vh,340px)}
 }
@@ -706,7 +805,17 @@ body.helping #btnHelp{display:none}
    Landscape handsets and very narrow phones: no oval, players in a row above
    the piles. Everything is laid out by flexbox, so overlap is impossible. */
 /* Narrowest phones: a slightly smaller card keeps the whole fan on screen. */
-@media (max-width:344px){ .card{width:92px; height:134px} }
+/* Narrowest phones: a slightly smaller card, height included — the mobile hand
+   pins a height of its own, so setting only the width here stretched the card
+   into a letterbox. The description keeps its place; the artwork gives up the
+   pixels instead. */
+@media (max-width:344px){
+  .card{width:96px; height:148px}
+  #hand .card{height:148px}
+  .card .cname{font-size:11px}
+  .card .cdesc{font-size:9.5px; min-height:34px; padding:2px 2px 4px}
+  .card .art svg{max-height:48px}
+}
 @media (max-height:520px),(max-width:339px){
   #tableMid{display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
     gap:6px; min-height:0; padding-top:2px}
@@ -721,7 +830,7 @@ body.helping #btnHelp{display:none}
   #centerPiles{position:static; transform:none; margin-top:16px}
   .turnPointer{display:none}
   .pile{width:62px; height:88px}
-  .pile .plabel{font-size:10px; top:-15px}
+  .pile .plabel{font-size:10px; top:-21px}
   #logbar{min-height:26px; font-size:14px}
   .credit{display:none}
 }
@@ -731,6 +840,32 @@ body.helping #btnHelp{display:none}
   .card{width:92px; height:146px}
   #hand{display:flex; flex-wrap:nowrap; gap:0; overflow-x:auto; max-height:none; min-height:150px; padding:8px 10px 4px}
   #hand .card{margin-right:-16px; width:92px; max-width:none; height:146px; aspect-ratio:auto}
+  /* Landscape is the one place with no room for the description on the card
+     itself — the line above the hand carries it instead (updateHandInfo). */
+  .card .cdesc{display:none}
+}
+/* ---------- no hover on a touch screen (BUILD 27) ----------
+   A phone has no pointer to move away, so :hover STICKS to whatever you tapped
+   last: buttons stay hovering in the air, the rules button stays gold, a chip
+   stays raised. Individually tiny, together it is most of what made the phone
+   build feel unsettled — things moved and then never moved back. One block,
+   applied only where there is no real pointer, so the desktop is untouched. */
+@media (hover:none){
+  .btn:hover{transform:none; box-shadow:var(--shadow)}
+  .railBtn:hover{transform:none}
+  #btnHelp:hover{transform:none; background:var(--paper);
+    box-shadow:0 4px 0 rgba(20,12,8,.35)}
+  #btnHelp:hover .q{transform:none}
+  #btnHelp:hover .lbl{color:var(--ink-soft)}
+  .spyChip:hover{transform:none}
+  #reactBar button:hover{transform:none}
+  .chip:hover{transform:none}
+  /* The hide-the-kitten strip: a 9px gap is a mouse target, not a thumb target.
+     On touch the gaps are always open and wide enough to hit, and the deck
+     cards slim down so the strip stays about the same length. */
+  .deckStrip .slot,.deckStrip .slot:hover{width:24px; opacity:.9;
+    background:rgba(255,197,61,.28); border-left:3px solid var(--ink-soft)}
+  .deckStrip .dcard{width:20px}
 }
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.001s !important; transition-duration:.001s !important}
@@ -1904,6 +2039,84 @@ function handOrder(){
   const rank=t=>SORT_RANK[t]!==undefined?SORT_RANK[t]:10+CAT_TYPES.indexOf(t);
   return idx.sort((a,b)=>rank(h[a])-rank(h[b])||h[a].localeCompare(h[b])||a-b);
 }
+/* ---------- stacked hand (BUILD 26) ----------
+   A hand is full of duplicates — four of every cat family are in the deck, and
+   Nopes and Skips come in numbers — so eight cards is usually only four or five
+   DIFFERENT cards. Showing each duplicate as its own card spent the phone's
+   entire width on repetition, which is what forced every previous attempt to
+   shrink the cards until their text had to go.
+
+   So identical cards are drawn as ONE card wearing a ×N badge. The screen gets
+   quieter without a single word being hidden, and cat combos — which are the
+   only reason duplicates matter — become natural: tap a stack once for one
+   copy, twice for a pair, three times for a trio.
+
+   Each stack keeps the REAL hand indices behind it, in display order, because
+   that is what the engine speaks. Picking k copies means picking the first k of
+   those indices; nothing downstream needs to know stacks exist. */
+function handStacks(){
+  const h=myHand(), by=new Map();
+  handOrder().forEach(i=>{
+    const t=h[i];
+    if(!by.has(t))by.set(t,{type:t,idx:[]});
+    by.get(t).idx.push(i);
+  });
+  return [...by.values()];
+}
+/* How many copies of this stack are currently picked. */
+const stackPicked=st=>st.idx.filter(i=>selected.includes(i)).length;
+/* Tap a stack: take one more copy, and wrap back round to none once you have
+   them all. That single gesture covers "play this card", "play a pair" and
+   "play a trio" without a second control. */
+function toggleStack(type){
+  if(!isMyTurn()||G.phase!=='turn'){selected=[];syncSelection();return;}
+  const st=handStacks().find(s=>s.type===type); if(!st)return;
+  const had=stackPicked(st);
+  const want=had>=st.idx.length?0:had+1;
+  selected=selected.filter(i=>!st.idx.includes(i));
+  for(let k=0;k<want;k++)selected.push(st.idx[k]);
+  sPop();
+  syncSelection(type,want>had);             // in place: the card can now animate
+  if(want===1)revealCard(st.idx[0]);        // scroll a newly picked stack into view
+}
+/* ---------- selection feedback without a rebuild (BUILD 27) ----------
+   renderHand() empties #hand and builds it again from scratch. That is the
+   right thing when the CARDS change — but it was also what ran on every tap,
+   and a brand new DOM node has nothing to transition FROM. The lift, the ring
+   and the badge all snapped into place with no animation, so a tap felt dead
+   even though the state underneath was perfectly correct.
+
+   syncSelection() leaves the elements where they are and changes only what a
+   tap can change: the picked class, the badge, and the two buttons. The CSS
+   transitions then have something to animate between, and `pop` adds a one-shot
+   overshoot so picking a card is felt as well as seen.
+
+   Card types are plain A-Z/underscore identifiers ('DEFUSE', 'CAT_CHAI'), so
+   they go into an attribute selector without escaping. */
+function syncSelection(tapped,grew){
+  const h=$('#hand'); if(!h)return;
+  handStacks().forEach(st=>{
+    const el=h.querySelector('.card[data-type="'+st.type+'"]'); if(!el)return;
+    const n=st.idx.length, picked=stackPicked(st);
+    el.classList.toggle('sel',picked>0);
+    const b=el.querySelector('.stackn');
+    if(b){
+      const txt=picked?picked+'/'+n:'×'+n;
+      if(b.textContent!==txt){             // only bounce the badge when it changes
+        b.textContent=txt;
+        b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump');
+      }
+      b.classList.toggle('picked',picked>0);
+    }
+    if(st.type===tapped&&grew){
+      el.classList.remove('pop'); void el.offsetWidth;   // restart the animation
+      el.classList.add('pop');
+      el.addEventListener('animationend',()=>el.classList.remove('pop'),{once:true});
+    }
+  });
+  updateHandButtons();
+  updateHandInfo();
+}
 /* ---------- hand layout ----------
    Two very different jobs behind one name (kept, so every existing caller and
    the resize handler still work):
@@ -1911,28 +2124,25 @@ function handOrder(){
      desktop  — layoutTilt() gives the single overlapping row a few degrees of
                 per-card rotation and a shallow bow, so it reads as a hand you
                 are holding rather than a filing cabinet.
-     phone    — BUILD 24 replaced the absolutely-positioned arc with a plain
-                wrapped CSS grid (see the max-width:620px block), so there is no
-                positioning to do. Two small jobs remain:
-
-                * pick how many columns the grid uses. A hand is normally 8
-                  cards, which is 4 + 4 — but hands grow: Attack forces two
-                  draws, Favor and cat combos hand you other people's cards, and
-                  a hoarder can easily sit on a dozen. Rather than piling up
-                  rows (which pushes the hand off the bottom of the screen), the
-                  columns go up and the cards get narrower, so a hand stays two
-                  rows all the way to twelve cards. Past that it wraps to a
-                  third row, which beats shrinking the art into confetti.
-                  ceil(n/2) is just "half the hand per row"; clamped to 4..6.
-
-                * strip any inline transform the desktop tilt left behind, for
-                  instance after rotating a phone from landscape to portrait. */
+     phone    — BUILD 25 puts the hand back to a single row you swipe, laid out
+                entirely by CSS. Nothing to position; the only job is stripping
+                any inline transform the desktop tilt left behind, for instance
+                after rotating a phone from landscape to portrait. */
 function layoutFan(){
   const h=$('#hand'); if(!h)return;
   const cards=[...h.querySelectorAll('.card')];
-  if(window.innerWidth>=620){h.style.removeProperty('--cols');layoutTilt(cards);return;}
-  h.style.setProperty('--cols',Math.max(4,Math.min(6,Math.ceil(cards.length/2))));
+  if(window.innerWidth>=620){layoutTilt(cards);return;}
   cards.forEach(c=>{c.style.transform='';c.style.zIndex='';});
+}
+/* Bring a card the player just picked fully into view. Scrolls the hand only —
+   never the page — by nudging the row by the gap between the card's centre and
+   the row's centre. */
+function revealCard(i){
+  if(window.innerWidth>=620)return;
+  const h=$('#hand'); if(!h)return;
+  const el=h.querySelector('.card[data-i="'+i+'"]'); if(!el)return;
+  const er=el.getBoundingClientRect(), hr=h.getBoundingClientRect();
+  h.scrollBy({left:(er.left+er.width/2)-(hr.left+hr.width/2),behavior:'smooth'});
 }
 function renderHand(){
   const h=$('#hand'); h.innerHTML='';
@@ -1941,17 +2151,29 @@ function renderHand(){
   if(ghost&&G.phase!=='over'){renderSpectator();return;}
   if(HIDE_HAND||!G||!G.players[VIEW]||!G.players[VIEW].alive){
     $('#btnPlaySel').style.display='none';$('#btnDraw').style.display='none';
+    updateHandInfo();                    // clear the readout behind the pass-and-play curtain
     return;
   }
-  handOrder().forEach(i=>{
-    const t=myHand()[i];
-    h.insertAdjacentHTML('beforeend',cardHTML(t,selected.includes(i)?'sel':''));
+  /* One card per DISTINCT card type, wearing a ×N badge when it stands for
+     several. The badge doubles as the picked-count readout: "2/3" while you're
+     part-way through selecting a combo. */
+  handStacks().forEach(st=>{
+    const n=st.idx.length, picked=stackPicked(st);
+    h.insertAdjacentHTML('beforeend',cardHTML(st.type,picked?'sel':''));
     const el=h.lastElementChild;
-    el.dataset.i=i;                      // the fan needs to know which card is which
-    el.onclick=()=>{toggleSel(i)};
+    el.dataset.i=st.idx[0];              // revealCard() finds a card by index
+    el.dataset.type=st.type;
+    if(n>1){
+      const b=document.createElement('div');
+      b.className='stackn'+(picked?' picked':'');
+      b.textContent=picked?picked+'/'+n:'×'+n;
+      el.appendChild(b);
+    }
+    el.onclick=()=>toggleStack(st.type);
   });
   layoutFan();
   updateHandButtons();
+  updateHandInfo();
 }
 /* Once you've exploded you get the run of the table: pick any player and see
    their hand face-up. Defaults to whoever is currently playing. */
@@ -1975,18 +2197,6 @@ function renderSpectator(){
   layoutFan();
   if(!sp.hand.length)h.innerHTML='<div style="color:var(--paper);opacity:.8">empty hand</div>';
 }
-function toggleSel(i){
-  if(!isMyTurn()||G.phase!=='turn'){selected=[];renderHand();return;}
-  const k=selected.indexOf(i);
-  if(k>=0){selected.splice(k,1);}
-  else{
-    selected.push(i);
-    const c=CARDS[myHand()[i]];                    // spell the card out above the hand
-
-    if(c)flash(c.name+' — '+c.desc);
-  }
-  renderHand();
-}
 /* Enable/label the Play and Draw buttons for the current selection. */
 function updateHandButtons(){
   const play=$('#btnPlaySel'), draw=$('#btnDraw');
@@ -2002,7 +2212,13 @@ function updateHandButtons(){
   const cls=types.length?classifyPlay(types):null;
   if(mine&&cls){
     play.style.display='';
-    play.textContent=cls.kind==='PAIR'?'Play pair: steal!':cls.kind==='TRIPLE'?'Play trio: demand!':cls.kind==='FIVE'?'Play 5: dig!':'Play '+CARDS[types[0]].name;
+    /* Same short-label trick as Draw above: the full phrasing wrapped the
+       control row onto a second line on a narrow phone, which pushed the row
+       off the bottom of the screen. */
+    play.textContent=cls.kind==='PAIR'?(tight?'Steal!':'Play pair: steal!')
+                    :cls.kind==='TRIPLE'?(tight?'Demand!':'Play trio: demand!')
+                    :cls.kind==='FIVE'?(tight?'Dig!':'Play 5: dig!')
+                    :(tight?'Play':'Play '+CARDS[types[0]].name);
     play.onclick=()=>beginPlay(types,cls);
   }else play.style.display='none';
 }
@@ -2100,11 +2316,51 @@ function fxDraw(pid){
   flyCard(cardBackHTML(),rectOf($('#deckPile')),to);sSwish();
 }
 function fxNope(){const s=document.createElement('div');s.className='nopeStamp';s.textContent='NOPE!';document.body.appendChild(s);setTimeout(()=>s.remove(),850);sNope();}
+/* ---------- the line above the hand ----------
+   Two things share it, and BUILD 25 finally made them behave:
+
+     flash()          a passing announcement ("You drew a Nope.") in gold, which
+                      hands the line back after a few seconds.
+     updateHandInfo() the resting state — what you currently have selected, or a
+                      hint when nothing is.
+
+   Before, flash() faded its own colour and then called renderHand(), which
+   rebuilt the whole hand three seconds after every message and left the stale
+   sentence sitting there for good. Now the timer just gives the line back to
+   updateHandInfo(), and while `flashT` is running updateHandInfo() keeps its
+   hands off — so a message is never overwritten mid-sentence. */
 let flashT=null;
 function flash(msg){
   const el=$('#handInfo'); if(!el)return;
   el.textContent=msg; el.style.color='var(--sun)';
-  clearTimeout(flashT); flashT=setTimeout(()=>{el.style.color='';renderHand();},3200);
+  clearTimeout(flashT); flashT=setTimeout(()=>{flashT=null;updateHandInfo();},3200);
+}
+/* What the line says when nothing is being announced. */
+function updateHandInfo(){
+  const el=$('#handInfo');
+  if(!el||flashT)return;                       // an announcement owns the line
+  el.style.color='';
+  if(!G||!G.players[VIEW]||!G.players[VIEW].alive||HIDE_HAND){el.textContent='';return;}
+  const h=myHand();
+  if(selected.length===1){
+    const c=CARDS[h[selected[0]]];
+    el.innerHTML=c?'<b>'+c.name+'</b> — '+c.desc:'';
+    return;
+  }
+  if(selected.length>1){
+    /* Cat cards only do anything in matching sets, so say which set is on the
+       table and what it would buy — much more use than "3 selected". */
+    const types=selected.map(i=>h[i]);
+    const same=types.every(t=>t===types[0]);
+    const COMBO={2:'steal a random card',3:'demand a card by name',5:'take any card from the discard pile'};
+    if(same&&COMBO[types.length])el.innerHTML='<b>'+types.length+' × '+CARDS[types[0]].name+'</b> — '+COMBO[types.length];
+    else if(!same&&types.length===5&&new Set(types).size===5)el.innerHTML='<b>Five different cats</b> — '+COMBO[5];
+    else el.textContent=types.length+' cards selected';
+    return;
+  }
+  el.textContent=(isMyTurn()&&G.phase==='turn')
+    ? 'Tap a card to pick it, or draw to end your turn.'
+    : h.length+' cards in hand';
 }
 /* Full-screen flash, screen shake and a bang. */
 function fxBoom(){
@@ -2488,9 +2744,9 @@ function openInsertPicker(n,cb){
   }
   strip+='<div class="stripEnd">BOTTOM</div>';
   modal(`<h2>Hide the kitten 😼</h2>
-    <p class="mtext" style="margin-top:-4px">Slip it anywhere among the ${n} cards — click a gap. Nobody sees where it goes.</p>
+    <p class="mtext" style="margin-top:-4px">Slip it anywhere among the ${n} cards — pick a gap, or use a shortcut below. Nobody sees where it goes.</p>
     <div class="deckStrip" id="deckStrip">${strip}</div>
-    <div class="mtext" id="slotLabel">Hover a gap to see where it lands…</div>
+    <div class="mtext" id="slotLabel">Pick a gap to see where it lands…</div>
     <div class="mrow">
       <button class="btn small sun" data-quick="0">Right on top 😈</button>
       <button class="btn small" data-quick="${Math.floor(n/2)}">Middle</button>
